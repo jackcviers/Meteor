@@ -1,37 +1,37 @@
 #!/usr/bin/perl -w
 ###############################################################################
-#	Copyright 2006 BITart Gerd Knops,  All rights reserved.
+#   Meteor
+#   An HTTP server for the 2.0 web
+#   Copyright (c) 2006 contributing authors
 #
-#	Project	: Meteor
-#	File	: meteord
-#	Author	: Gerd Knops gerti@BITart.com
+#   The Meteor daemon
 #
-###############################################################################
-#
-#	History:
-#	060821 Creation of file
-#
-###############################################################################
-#
-#	Description:
-#	The Meteor daemon
-#
-#	$Id:$
+#	Main program should call Meteor::Config::setCommandLineParameters(@ARGV),.
+#	Afterwards anybody can access $::CONF{<parameterName>}, where
+#	<parameterName> is any valid parameter (except 'Help') listed in the
+#	@DEFAULTS array below.
 #
 ###############################################################################
 #
-# DISCLAIMER
+#   This program is free software; you can redistribute it and/or modify it
+#   under the terms of the GNU General Public License as published by the Free
+#   Software Foundation; either version 2 of the License, or (at your option)
+#   any later version.
 #
-# BITart and Gerd Knops make no warranties, representations or commitments
-# with regard to the contents of this software. BITart and Gerd Knops
-# specifically disclaim any and all warranties, whether express, implied or
-# statutory, including, but not limited to, any warranty of merchantability
-# or fitness for a particular purpose, and non-infringement. Under no
-# circumstances will BITart or Gerd Knops be liable for loss of data,
-# special, incidental or consequential damages out of the use of this
-# software, even if those damages were foreseeable, or BITart or Gerd Knops
-# was informed of their potential.
+#   This program is distributed in the hope that it will be useful, but WITHOUT
+#   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+#   FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+#   more details.
 #
+#   You should have received a copy of the GNU General Public License along
+#   with this program; if not, write to the Free Software Foundation, Inc.,
+#   59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+#
+#   For more information visit www.meteorserver.org
+#
+###############################################################################
+
+
 ###############################################################################
 # Configuration
 ###############################################################################
