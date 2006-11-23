@@ -30,7 +30,10 @@ function Meteor(instID) {
 	this.callback_reset = function() {};
 	this.callback_eof = function() {};
 	this.callback_changemode = function() {};
+	this.callback_statuschanged = function() {};
 	this.persist = true;
+	this.frameloadtimer = false;
+	this.frameurl = false;
 
 	// Documented public properties
 	this.channel = false;
@@ -44,6 +47,15 @@ function Meteor(instID) {
 	this.polltimeout=30000;
 	this.maxmessages=0;
 	this.pingtimeout = 10000;
+	this.status = 0;
+
+	/* Statuses:	0 = Uninitialised,
+					1 = Loading stream,
+					2 = Loading controller frame,
+					3 = Controller frame timeout, retrying every 5 seconds
+					4 = Controller frame loaded and ready
+					5 = Receiving data
+	*/
 
 	// Set or retrieve host id.  Cookie takes this form:
 	// MeteorID=123:6356353/124:098320454;
@@ -85,6 +97,8 @@ Meteor.register = function(ifr) {
 	ifr.eof = this.instances[instid].eof.bind(this.instances[instid]);
 	ifr.get = this.instances[instid].get.bind(this.instances[instid]);
 	ifr.increasepolldelay = this.instances[instid].increasepolldelay.bind(this.instances[instid]);
+	clearTimeout(this.instances[instid].frameloadtimer);
+	this.instances[instid].setstatus(4);
 }
 
 Meteor.setServerTime = function(timestamp) {
@@ -110,6 +124,7 @@ Meteor.prototype.start = function() {
 	}
 	if (this.mode=="stream") {
 		if (document.all) {
+			this.setstatus(1);
 			this.transferDoc = new ActiveXObject("htmlfile");
 			this.transferDoc.open();
 			this.transferDoc.write("<html>");
@@ -140,7 +155,8 @@ Meteor.prototype.start = function() {
 			ifr.style.zIndex = "-20";
 			ifr.id = "meteorframe_"+this.instID;
 			document.body.appendChild(ifr);
-			ifr.src = "http://"+this.subdomain+"."+location.hostname+"/stream.html?nocache="+t;
+			this.frameurl = "http://"+this.subdomain+"."+location.hostname+"/stream.html";
+			this.frameload();
 		}
 		var f = this.pollmode.bind(this);
 		clearTimeout(this.pingtimer);
@@ -160,7 +176,8 @@ Meteor.prototype.start = function() {
 		}
 		ifr.id = "meteorframe_"+this.instID;
 		document.body.appendChild(ifr);
-		ifr.src = "http://"+this.subdomain+"."+location.hostname+"/poll.html?nocache="+t;
+		this.frameurl = "http://"+this.subdomain+"."+location.hostname+"/poll.html";
+		this.frameload();
 		this.recvtimes[0] = t;
 		if (this.updatepollfreqtimer) clearTimeout(this.updatepollfreqtimer);
 		this.updatepollfreqtimer = setInterval(this.updatepollfreq.bind(this), 2500);
@@ -172,6 +189,7 @@ Meteor.prototype.pollmode = function() {
 	this.mode="poll";
 	this.start();
 	this.callback_changemode("poll");
+	this.lastpingtime = false;
 }
 
 Meteor.prototype.process = function(id, data) {
@@ -187,6 +205,7 @@ Meteor.prototype.process = function(id, data) {
 	} else if (id == -1) {
 		this.ping();
 	}
+	this.setstatus(5);
 }
 
 Meteor.prototype.ping = function() {
@@ -197,6 +216,7 @@ Meteor.prototype.ping = function() {
 		var now = new Date();
 		this.lastpingtime = now.getTime();
 	}
+	this.setstatus(5);
 }
 
 Meteor.prototype.reset = function() {
@@ -249,9 +269,36 @@ Meteor.prototype.registerEventCallback = function(evt, funcRef) {
 		this.callback_eof = (this.callback_eof).andThen(funcRef);
 	} else if (evt=="changemode") {
 		this.callback_changemode = (this.callback_changemode).andThen(funcRef);
+	} else if (evt=="changestatus") {
+		this.callback_statuschanged = (this.callback_statuschanged).andThen(funcRef);
 	}
 }
 
+Meteor.prototype.frameload = function() {
+	this.setstatus(2);
+	if (document.getElementById("meteorframe_"+this.instID)) {
+		var f = this.frameloadtimeout.bind(this);
+		this.frameloadtimer = setTimeout(f, 5000);
+		document.getElementById("meteorframe_"+this.instID).src = "about:blank";
+		setTimeout(this.doloadurl.bind(this), 100);
+	}
+}
+Meteor.prototype.doloadurl = function() {
+	var now = new Date();
+	var t = now.getTime();
+	document.getElementById("meteorframe_"+this.instID).src = this.frameurl+"?nocache="+t;
+}
+Meteor.prototype.frameloadtimeout = function() {
+	if (this.frameloadtimer) clearTimeout(this.frameloadtimer);
+	this.setstatus(3);
+	this.frameload();
+}
+Meteor.prototype.setstatus = function(newstatus) {
+	if (this.status != newstatus) {
+		this.status = newstatus;
+		this.callback_statuschanged(newstatus);
+	}
+}
 
 Meteor.createCookie = function(name,value,days) {
 	if (days) {
