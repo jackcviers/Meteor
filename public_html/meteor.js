@@ -16,6 +16,34 @@ Function.prototype.andThen=function(g) {
 		f(a);g(args);
 	}
 };
+function addUnLoadEvent(func) {
+  var oldonunload = window.onunload;
+  if (typeof window.onunload != 'function') {
+    window.onunload = func;
+  } else {
+    window.onunload = function() {
+      if (oldonunload) {
+        oldonunload();
+      }
+      func();
+    }
+  }
+}
+addUnLoadEvent(meteordestroy);
+function meteordestroy() {
+	var x = Meteor.instances.length;
+	for(var i=0; i<x; i++) {
+		if (typeof(Meteor.instances[i].transferDoc)=="object") {
+			Meteor.instances[i].transferDoc.open();
+			Meteor.instances[i].transferDoc.close();
+			delete Meteor.instances[i].transferDoc;
+		}
+		if (document.getElementById("meteorframe_"+Meteor.instances[i].instID)) {
+			document.body.removeChild(document.getElementById("meteorframe_"+Meteor.instances[i].instID));
+		}
+		delete Meteor.instances[i];
+	}
+}
 
 function Meteor(instID) {
 
