@@ -9,6 +9,8 @@ document.domain = topdomain;
 var lastrequesttime = 0;
 var pollreq = false;
 var polltimer = false;
+var i=0;
+var isaborted = 0;
 parent.Meteor.register(this);
 
 Function.prototype.bind = function(obj) {
@@ -40,7 +42,10 @@ function newXmlHttp() {
 }
 
 function poll() {
-	if (polltimer) clearTimeout(polltimer);
+	isaborted = 0;
+	try {
+		clearTimeout(polltimer);
+	} catch (e) {}
 	var byteoffset = 0;
 	var newdata;
 	document.domain = topdomain;
@@ -60,8 +65,8 @@ function poll() {
 		document.domain = thisdomain;
 	} catch (e) {}
 	pollreq = newXmlHttp();
+	pollreq.onreadystatechange = handleresponse;
 	pollreq.open("GET", url, true);
-	pollreq.onreadystatechange = handleresponse.bind(pollreq);
 	lastrequesttime = t;
 	if (get("polltimeout")) polltimer = setTimeout(ptimeout, get("polltimeout"));
 	pollreq.send(null);
@@ -69,10 +74,13 @@ function poll() {
 }
 
 function handleresponse() {
-	if (this.readyState == 4) {
+	if (typeof(pollreq) == "object" && pollreq.readyState == 4 && !isaborted) {
+		try {
+			clearTimeout(polltimer);
+		} catch (e) {}
 		if (typeof(topdomain) == "undefined") return false;
 		document.domain=topdomain;
-		newdata = this.responseText;
+		newdata = pollreq.responseText;
 		var x = newdata.indexOf("parent.Meteor.setServerTime(");
 		if (x != -1) {
 			y = newdata.indexOf(");", x);
@@ -101,11 +109,15 @@ function handleresponse() {
 }
 
 function ptimeout() {
-	if (typeof(pollreq) == "object") {
-		pollreq.abort();
-		delete pollreq;
-	}
-	poll();
+	isaborted = 1;
+	pollreq.abort();
+	delete pollreq;
+	clearTimeout(polltimer);
+	var now = new Date();
+	var t = now.getTime();
+	var x = get("pollfreq") - (t-lastrequesttime);
+	if (x < 10) x = 10;
+	setTimeout(poll, x);
 }
 
 poll();

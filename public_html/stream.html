@@ -5,6 +5,8 @@ window.onError = null;
 var domainparts = document.domain.split(".");
 document.domain = domainparts[domainparts.length-2]+"."+domainparts[domainparts.length-1];
 parent.Meteor.register(this);
+var streamreq;
+var byteoffset;
 
 Function.prototype.bind = function(obj) {
 	var method = this,
@@ -38,28 +40,29 @@ function newXmlHttp() {
 	return xmlhttp;
 }
 
-var streamreq = newXmlHttp();
-var byteoffset = 0;
-var buffer;
-var newdata;
-var url = "http://"+location.hostname+"/push?channel="+get("channel")+"&id="+get("MHostId")+"&template=2";
-if (get("lastmsgreceived") >= 0) {
-	url += "&restartfrom="+(get("lastmsgreceived")+1);
-} else if (get("backtrack") > 0) {
-	url += "&backtrack="+get("backtrack");
-} else if (typeof(get("backtrack")) != "number") {
-	url += "&restartfrom=";
+function startstream() {
+	streamreq = newXmlHttp();
+	byteoffset = 0;
+	var url = "http://"+location.hostname+"/push?channel="+get("channel")+"&id="+get("MHostId")+"&template=2";
+	if (get("lastmsgreceived") >= 0) {
+		url += "&restartfrom="+(get("lastmsgreceived")+1);
+	} else if (get("backtrack") > 0) {
+		url += "&backtrack="+get("backtrack");
+	} else if (typeof(get("backtrack")) != "number") {
+		url += "&restartfrom=";
+	}
+	var now = new Date();
+	var t = now.getTime();
+	url += "&nocache="+t;
+	streamreq.open("GET", url, true);
+	streamreq.onreadystatechange = handleresponse.bind(streamreq);
+	streamreq.send(null);
 }
-var now = new Date();
-var t = now.getTime();
-url += "&nocache="+t;
-streamreq.open("GET", url, true);
-streamreq.onreadystatechange = handleresponse.bind(streamreq);
 
 function handleresponse() {
 	if (this.readyState == 3) {
-		buffer = this.responseText;
-		newdata = buffer.substring(byteoffset);
+		var buffer = this.responseText;
+		var newdata = buffer.substring(byteoffset);
 		byteoffset = buffer.length;
 		var x = newdata.indexOf("parent.Meteor.setServerTime(");
 		if (x != -1) {
@@ -86,12 +89,16 @@ function handleresponse() {
 		}
 		byteoffset = buffer.length-newdata.length;
 	} else if (this.readyState == 4) {
-		if (typeof(r)== "function") r();
+		delete streamreq;
+		if (typeof(startstream)=="function") {
+			startstream();
+		} else if (typeof(r)=="function") {
+			r();
+		}
 	}
 }
-streamreq.send(null);
 
-
+startstream();
 </script>
 </body>
 </html>
