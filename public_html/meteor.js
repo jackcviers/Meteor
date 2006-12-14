@@ -210,7 +210,7 @@ Meteor.prototype.pollmode = function() {
 	this.lastpingtime = false;
 }
 
-Meteor.prototype.process = function(id, data, timestamp) {
+Meteor.prototype.process = function(id, data) {
 	if (id > this.lastmsgreceived) {
 		this.callback_process(data);
 		if (id != -1) this.lastmsgreceived = id;
@@ -224,9 +224,6 @@ Meteor.prototype.process = function(id, data, timestamp) {
 		this.ping();
 	}
 	this.setstatus(5);
-	if (!isNaN(timestamp)) {
-		Meteor.setServerTime(timestamp);
-	}
 }
 
 Meteor.prototype.ping = function() {

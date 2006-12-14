@@ -45,6 +45,8 @@ sub serveFileToClient {
 	my $class=shift;
 	my $relPath=shift;
 	my $client=shift;
+
+	&::syslog('debug',"Meteor::Document: Request received for '%s'",$relPath);
 	
 	my $doc=$class->documentForPath($relPath);
 	
