@@ -135,27 +135,65 @@ sub pathToAbsolute {
 	$relPath=~s/^[\/]*//;
 	$relPath=~s/[\/]*$//;
 	
-	# split into path components
-	my @pathComponents=split(/[\/]+/,$relPath);
 	
-	# Check components
-	foreach (@pathComponents)
+	# NOTE: With the right strings the code below triggers a bug in
+	# perl (5.8.6 currently) that will result in messages like
+	#
+	# 	Attempt to free unreferenced scalar
+	#
+	# and an eventual crash.
+	#
+	# So it was replaced with the more naive code following this
+	# commented out code.
+	#
+	# # split into path components
+	# my @pathComponents=split(/[\/]+/,$relPath);
+	# 
+	# # Check components
+	# foreach (@pathComponents)
+	# {
+	# 	# Very strict: We only allow alphanumeric characters, dash and
+	# 	# underscore, followed by any number of extensions that also
+	# 	# only allow the above characters.
+	# 	unless(/^[a-z0-9\-\_][a-z0-9\-\_\.]*$/i)
+	# 	{
+	# 		&::syslog('debug',
+	# 			"Meteor::Document: Rejecting path '%s' due to invalid component '%s'",
+	# 			$relPath,$_
+	# 		);
+	# 		
+	# 		return undef;
+	# 	}
+	# }
+	#
+	#my $path=$::CONF{'SubscriberDocumentRoot'}.'/'.join('/',@pathComponents);
+	
+	#
+	# Check for all alphanumeric or dash, underscore, dot and slash
+	#
+	unless($relPath=~/^[a-z0-9\-\_\.\/]*$/i)
 	{
-		# Very strict: We only allow alphanumric characters, dash and
-		# underscore, followed by any number of extensions that also
-		# only allow the above characters.
-		unless(/^[a-z0-9\-\_][a-z0-9\-\_\.]*$/i)
-		{
-			&::syslog('debug',
-				"Meteor::Document: Rejecting path '%s' due to invalid component '%s'",
-				$relPath,$_
-			);
-			
-			return undef;
-		}
+		&::syslog('debug',
+			"Meteor::Document: Rejecting path '%s' due to invalid characters",
+			$relPath
+		);
+		
+		return undef;
+	}
+	#
+	# Don't allow '..'
+	#
+	if(index($relPath,'..')>=0)
+	{
+		&::syslog('debug',
+			"Meteor::Document: Rejecting path '%s' due to invalid sequence '..'",
+			$relPath
+		);
+		
+		return undef;
 	}
 	
-	my $path=$::CONF{'SubscriberDocumentRoot'}.'/'.join('/',@pathComponents);
+	my $path=$::CONF{'SubscriberDocumentRoot'}.'/'.$relPath;
 	
 	# If it is a directory, append DirectoryIndex config value
 	$path.='/'.$::CONF{'DirectoryIndex'} if(-d $path);
