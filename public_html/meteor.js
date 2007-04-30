@@ -16,27 +16,6 @@ Function.prototype.andThen=function(g) {
 		f(a);g(args);
 	}
 };
-function addUnLoadEvent(func) {
-  var oldonunload = window.onunload;
-  if (typeof window.onunload != 'function') {
-    window.onunload = func;
-  } else {
-    window.onunload = function() {
-      if (oldonunload) {
-        oldonunload();
-      }
-      func();
-    }
-  }
-}
-//addUnLoadEvent(meteordestroy);
-function meteordestroy() {
-	var x = Meteor.instances.length;
-	for(var i=0; i<x; i++) {
-		Meteor.instances[i].stop();
-		delete Meteor.instances[i];
-	}
-}
 
 function Meteor(instID) {
 
@@ -55,6 +34,7 @@ function Meteor(instID) {
 	this.persist = true;
 	this.frameloadtimer = false;
 	this.frameurl = false;
+	this.debugmode = false;
 
 	// Documented public properties
 	this.channel = false;
@@ -64,7 +44,7 @@ function Meteor(instID) {
 	this.smartpoll = true;
 	this.pollfreq = 2000;
 	this.minpollfreq = 2000;
-	this.mode = "stream";
+	this.mode = "poll";
 	this.polltimeout=30000;
 	this.maxmessages=0;
 	this.pingtimeout = 10000;
@@ -73,17 +53,16 @@ function Meteor(instID) {
 	/* Statuses:	0 = Uninitialised,
 					1 = Loading stream,
 					2 = Loading controller frame,
-					3 = Controller frame timeout, retrying every 5 seconds
+					3 = Controller frame timeout, retrying.
 					4 = Controller frame loaded and ready
 					5 = Receiving data
 	*/
 
 	this.instID = (typeof(instID) != "undefined") ? instID : 0;
-	this.MHostId = Math.floor(Math.random()*100000000)+this.instID;
+	this.MHostId = Math.floor(Math.random()*100000000)+""+this.instID;
 }
 
 Meteor.instances = new Array();
-Meteor.servertimeoffset = 0;
 
 Meteor.create = function(instID) {
 	if (!instID) instID = Meteor.instances.length;
@@ -93,7 +72,7 @@ Meteor.create = function(instID) {
 
 Meteor.register = function(ifr) {
 	instid = new String(ifr.window.frameElement.id);
-	instid = instid.replace("meteorframe_", "");
+	instid = instid.replace(/.*_([0-9]*)$/, "$1");
 	ifr.p = this.instances[instid].process.bind(this.instances[instid]);
 	ifr.r = this.instances[instid].reset.bind(this.instances[instid]);
 	ifr.eof = this.instances[instid].eof.bind(this.instances[instid]);
@@ -101,12 +80,7 @@ Meteor.register = function(ifr) {
 	ifr.increasepolldelay = this.instances[instid].increasepolldelay.bind(this.instances[instid]);
 	clearTimeout(this.instances[instid].frameloadtimer);
 	this.instances[instid].setstatus(4);
-}
-
-Meteor.setServerTime = function(timestamp) {
-	var now = new Date();
-	var clienttime = (now.getTime() / 1000);
-	Meteor.servertimeoffset = timestamp - clienttime;
+	if (this.debugmode) console.log("Frame registered");
 }
 
 Meteor.prototype.start = function() {
@@ -114,72 +88,26 @@ Meteor.prototype.start = function() {
 	this.smartpoll = (this.smartpoll)?1:0;
 	this.mode = (this.mode=="stream")?"stream":"poll";
 	if (!this.subdomain || !this.channel) throw "Channel or Meteor subdomain host not specified";
+	this.stop();
 	var now = new Date();
 	var t = now.getTime();
-	if (typeof(this.transferDoc)=="object") {
-		this.transferDoc.open();
-		this.transferDoc.close();
-		delete this.transferDoc;
-	}
-	if (document.getElementById("meteorframe_"+this.instID)) {
-		document.body.removeChild(document.getElementById("meteorframe_"+this.instID));
-	}
+	this.setstatus(1);
 	if (this.mode=="stream") {
-		if (document.all) {
-			this.setstatus(1);
-			this.transferDoc = new ActiveXObject("htmlfile");
-			this.transferDoc.open();
-			this.transferDoc.write("<html>");
-			this.transferDoc.write("<script>document.domain=\""+(document.domain)+"\";</"+"script>");
-			this.transferDoc.write("</html>");
-			var selfref = this;
-			this.transferDoc.parentWindow.Meteor = Meteor;
-			this.transferDoc.close();
-			var ifrDiv = this.transferDoc.createElement("div");
-			this.transferDoc.appendChild(ifrDiv);
-			var url = "http://"+this.subdomain+"."+location.hostname+"/"+this.dynamicpageaddress+"?channel="+this.channel+"&id="+this.MHostId;
-			if (this.lastmsgreceived >= 0) {
-				url += "&restartfrom="+this.lastmsgreceived;
-			} else if (this.backtrack > 0) {
-				url += "&backtrack="+this.backtrack;
-			} else if (this.backtrack < 0 || isNaN(this.backtrack)) {
-				url += "&restartfrom=";
-			}
-			ifrDiv.innerHTML = "<iframe id=\"meteorframe_"+this.instID+"\" src=\""+url+"&nocache="+t+"\" style=\"display: none;\"></iframe>";
-		} else {
-			var ifr = document.createElement("IFRAME");
-			ifr.style.width = "10px";
-			ifr.style.height = "10px";
-			ifr.style.border = "none";
-			ifr.style.position = "absolute";
-			ifr.style.top = "-10px";
-			ifr.style.marginTop = "-10px";
-			ifr.style.zIndex = "-20";
-			ifr.id = "meteorframe_"+this.instID;
-			document.body.appendChild(ifr);
-			this.frameurl = "http://"+this.subdomain+"."+location.hostname+"/stream.html";
-			this.frameload();
+		var surl = "http://"+this.subdomain+"."+location.hostname+"/"+this.dynamicpageaddress+"?channel="+this.channel+"&id="+this.MHostId;
+		if (this.lastmsgreceived >= 0) {
+			surl += "&restartfrom="+this.lastmsgreceived;
+		} else if (this.backtrack > 0) {
+			surl += "&backtrack="+this.backtrack;
+		} else if (this.backtrack < 0 || isNaN(this.backtrack)) {
+			surl += "&restartfrom=";
 		}
+		this.createIframe(surl);
 		var f = this.pollmode.bind(this);
 		clearTimeout(this.pingtimer);
 		this.pingtimer = setTimeout(f, this.pingtimeout);
 
 	} else {
-		var ifr = document.createElement("IFRAME");
-		ifr.style.width = "10px";
-		ifr.style.height = "10px";
-		ifr.style.border = "none";
-		if (document.all) {
-			ifr.style.display = "none";
-		} else {
-			ifr.style.position = "absolute";
-			ifr.style.marginTop = "-10px";
-			ifr.style.zIndex = "-20";
-		}
-		ifr.id = "meteorframe_"+this.instID;
-		document.body.appendChild(ifr);
-		this.frameurl = "http://"+this.subdomain+"."+location.hostname+"/poll.html";
-		this.frameload();
+		this.createIframe("http://"+this.subdomain+"."+location.hostname+"/poll.html");
 		this.recvtimes[0] = t;
 		if (this.updatepollfreqtimer) clearTimeout(this.updatepollfreqtimer);
 		this.updatepollfreqtimer = setInterval(this.updatepollfreq.bind(this), 2500);
@@ -187,11 +115,44 @@ Meteor.prototype.start = function() {
 	this.lastrequest = t;
 }
 
+Meteor.prototype.createIframe = function(url) {
+	if (document.all) {
+		this.transferDoc = new ActiveXObject("htmlfile");
+		this.transferDoc.open();
+		this.transferDoc.write("<html>");
+		this.transferDoc.write("<script>document.domain=\""+(document.domain)+"\";</"+"script>");
+		this.transferDoc.write("</html>");
+		var selfref = this;
+		this.transferDoc.parentWindow.Meteor = Meteor;
+		this.transferDoc.close();
+		var ifrDiv = this.transferDoc.createElement("div");
+		this.transferDoc.appendChild(ifrDiv);
+		ifrDiv.innerHTML = "<iframe id=\"meteorframe_"+this.instID+"\" src=\""+url+"\" style=\"display: none;\"></iframe>";
+	} else {
+		var ifr = document.createElement("IFRAME");
+		ifr.style.width = "10px";
+		ifr.style.height = "10px";
+		ifr.style.border = "none";
+		ifr.style.position = "absolute";
+		ifr.style.top = "-10px";
+		ifr.style.marginTop = "-10px";
+		ifr.style.zIndex = "-20";
+		ifr.setAttribute("id", "meteorframe_"+this.instID);
+		ifr.Meteor = Meteor;
+		var innerifr = document.createElement("IFRAME");
+		innerifr.setAttribute("src", url);
+		innerifr.setAttribute("id", "meteorinnerframe_"+this.instID);
+		ifr.appendChild(innerifr);
+		document.body.appendChild(ifr);
+	}
+	if (this.debugmode) console.log("Loading URL '"+url+"' into frame...");
+	var f = this.frameloadtimeout.bind(this);
+	this.frameloadtimer = setTimeout(f, 5000);
+}
+
 Meteor.prototype.stop = function() {
 	if (typeof(this.transferDoc)=="object") {
-		this.transferDoc.open();
-		this.transferDoc.close();
-		delete this.transferDoc;
+		this.transferDoc = false;
 	}
 	if (document.getElementById("meteorframe_"+this.instID)) {
 		document.getElementById("meteorframe_"+this.instID).src="about:blank";
@@ -204,15 +165,17 @@ Meteor.prototype.stop = function() {
 }
 
 Meteor.prototype.pollmode = function() {
+	if (this.debugmode) console.log("Ping timeout");
+	this.stop();
 	this.mode="poll";
 	this.start();
 	this.callback_changemode("poll");
 	this.lastpingtime = false;
 }
 
-Meteor.prototype.process = function(id, data) {
+Meteor.prototype.process = function(id, data, timestamp) {
 	if (id > this.lastmsgreceived) {
-		this.callback_process(data);
+		this.callback_process(data, timestamp);
 		if (id != -1) this.lastmsgreceived = id;
 		if (this.mode=="poll") {
 			var now = new Date();
@@ -238,6 +201,7 @@ Meteor.prototype.ping = function() {
 }
 
 Meteor.prototype.reset = function() {
+	if (this.debugmode) console.log("Stream reset");
 	var now = new Date();
 	var t = now.getTime();
 	var x = this.pollfreq - (t-this.lastrequest);
@@ -292,24 +256,11 @@ Meteor.prototype.registerEventCallback = function(evt, funcRef) {
 	}
 }
 
-Meteor.prototype.frameload = function() {
-	this.setstatus(2);
-	if (document.getElementById("meteorframe_"+this.instID)) {
-		var f = this.frameloadtimeout.bind(this);
-		this.frameloadtimer = setTimeout(f, 5000);
-		document.getElementById("meteorframe_"+this.instID).src = "about:blank";
-		setTimeout(this.doloadurl.bind(this), 100);
-	}
-}
-Meteor.prototype.doloadurl = function() {
-	var now = new Date();
-	var t = now.getTime();
-	document.getElementById("meteorframe_"+this.instID).src = this.frameurl+"?nocache="+t;
-}
 Meteor.prototype.frameloadtimeout = function() {
+	if (this.debugmode) console.log("Frame load timeout");
 	if (this.frameloadtimer) clearTimeout(this.frameloadtimer);
 	this.setstatus(3);
-	this.frameload();
+	setTimeout(this.start.bind(this), 5000);
 }
 Meteor.prototype.setstatus = function(newstatus) {
 	if (this.status != newstatus) {
