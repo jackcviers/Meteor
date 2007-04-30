@@ -132,7 +132,7 @@ sub DESTROY {
 	my $self=shift;
 	
 	my @subscribers=@{$self->{'subscribers'}};
-	map { $_->close() } @subscribers;
+	map { $_->closeChannel($self->{'name'}) } @subscribers;
 }
 
 ###############################################################################

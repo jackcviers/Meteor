@@ -132,11 +132,32 @@ sub processLine {
 			my $startIndex=undef;
 			my $backtrack=undef;
 			my $persist=1;
+			my $anyPersist=0;
 			my $subscriberID=undef;
+			my $channels={};
 			foreach my $formElement (@formData)
 			{
 				if($formElement=~/^channel=(.+)$/)
 				{
+					if(defined($channelName))
+					{
+						if(defined($startIndex) && defined($backtrack))
+						{
+							$self->emitHeader("404 Cannot use both 'restartfrom' and 'backtrack'");
+							$self->close();
+							
+							return;
+						}
+						
+						$startIndex=-$backtrack if(!defined($startIndex) && defined($backtrack));
+						$channels->{$channelName}->{'startIndex'}=$startIndex;
+						$channels->{$channelName}->{'persist'}=$persist;
+						$anyPersist|=$persist;
+						
+						$startIndex=undef;
+						$backtrack=undef;
+						$persist=1;
+					}
 					$channelName=$1;
 				}
 				elsif($formElement=~/^restartfrom=(\d*)$/)
@@ -176,33 +197,39 @@ sub processLine {
 					}
 				}
 			}
-						
-			delete($self->{'headerBuffer'});
 			
-			if(defined($startIndex) && defined($backtrack))
+			if(defined($channelName))
 			{
-				$self->emitHeader("404 Cannot use both 'restartfrom' and 'backtrack'");
-				$self->close();
+				if(defined($startIndex) && defined($backtrack))
+				{
+					$self->emitHeader("404 Cannot use both 'restartfrom' and 'backtrack'");
+					$self->close();
+					
+					return;
+				}
 				
-				return;
+				$startIndex=-$backtrack if(!defined($startIndex) && defined($backtrack));
+				$channels->{$channelName}->{'startIndex'}=$startIndex;
+				$channels->{$channelName}->{'persist'}=$persist;
+				$anyPersist|=$persist;
 			}
 			
-			if(defined($subscriberID) && $persist)
+			delete($self->{'headerBuffer'});
+			
+			if(defined($subscriberID) && $anyPersist)
 			{
 				$self->{'subscriberID'}=$subscriberID;
 				$self->deleteSubscriberWithID($subscriberID);
 				$PersistentConnections{$subscriberID}=$self;
 			}
 			
-			if(defined($channelName))
+			if(scalar(keys %{$channels}))
 			{
 				$self->emitOKHeader();
 				
-				$startIndex=-$backtrack if(!defined($startIndex) && defined($backtrack));
+				$self->setChannels($channels);
 				
-				$self->setChannelName($channelName,$startIndex,$persist);
-				
-				$self->close(1) unless($persist);
+				$self->close(1) unless($anyPersist);
 				
 				return;
 			}
@@ -223,16 +250,21 @@ sub processLine {
 	}
 }
 
-sub setChannelName {
+sub setChannels {
 	my $self=shift;
-	my $channelName=shift;
-	my $startIndex=shift;
-	my $persist=shift;
+	my $channels=shift;
 	
-	my $channel=Meteor::Channel->channelWithName($channelName);
-	$self->{'channel'}=$channel if($persist);
-	
-	$channel->addSubscriber($self,$startIndex,$persist);
+	foreach my $channelName (keys %{$channels})
+	{
+		my $persist=$channels->{$channelName}->{'persist'};
+		my $startIndex=$channels->{$channelName}->{'startIndex'};
+		
+		my $channel=Meteor::Channel->channelWithName($channelName);
+		
+		$self->{'channels'}->{$channelName}=$channel if($persist);
+		
+		$channel->addSubscriber($self,$startIndex,$persist);
+	}
 }
 
 sub emitOKHeader {
@@ -309,12 +341,30 @@ sub sendMessage {
 	}
 }
 
+sub closeChannel {
+	my $self=shift;
+	my $channelName=shift;
+	
+	return unless(exists($self->{'channels'}->{$channelName}));
+	
+	my $channel=$self->{'channels'}->{$channelName};
+	$channel->removeSubscriber($self);
+	
+	delete($self->{'channels'}->{$channelName});
+	
+	$self->close() if(scalar(keys %{$self->{'channels'}})==0);
+}
+
 sub close {
 	my $self=shift;
 	my $noShutdownMsg=shift;
 	
-	$self->{'channel'}->removeSubscriber($self) if($self->{'channel'});
-	delete($self->{'channel'});
+	foreach my $channelName (keys %{$self->{'channels'}})
+	{
+		my $channel=$self->{'channels'}->{$channelName};
+		$channel->removeSubscriber($self);
+	}
+	delete($self->{'channels'});
 	
 	if(exists($self->{'subscriberID'}))
 	{
