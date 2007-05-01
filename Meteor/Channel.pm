@@ -203,7 +203,8 @@ sub addMessage {
 	my $messageText=shift;
 	
 	my $message=Meteor::Message->newWithID($MessageID++);
-	$message->setText($messageText);	
+	$message->setText($messageText);
+	$message->setChannelName($self->{'name'});
 	push(@{$self->{'messages'}},$message);
 	
 	$self->trimMessageStoreBySize();

@@ -77,6 +77,17 @@ sub setText {
 	$self->{'text'}=$text;
 }
 
+sub channelName {
+	shift->{'channel'};
+}
+
+sub setChannelName {
+	my $self=shift;
+	my $channelName=shift || '';
+	
+	$self->{'channel'}=$channelName;
+}
+
 sub text {
 	shift->{'text'};
 }
