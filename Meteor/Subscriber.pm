@@ -132,7 +132,6 @@ sub processLine {
 			my $startIndex=undef;
 			my $backtrack=undef;
 			my $persist=1;
-			my $anyPersist=0;
 			my $subscriberID=undef;
 			my $channels={};
 			foreach my $formElement (@formData)
@@ -151,12 +150,9 @@ sub processLine {
 						
 						$startIndex=-$backtrack if(!defined($startIndex) && defined($backtrack));
 						$channels->{$channelName}->{'startIndex'}=$startIndex;
-						$channels->{$channelName}->{'persist'}=$persist;
-						$anyPersist|=$persist;
 						
 						$startIndex=undef;
 						$backtrack=undef;
-						$persist=1;
 					}
 					$channelName=$1;
 				}
@@ -210,13 +206,11 @@ sub processLine {
 				
 				$startIndex=-$backtrack if(!defined($startIndex) && defined($backtrack));
 				$channels->{$channelName}->{'startIndex'}=$startIndex;
-				$channels->{$channelName}->{'persist'}=$persist;
-				$anyPersist|=$persist;
 			}
 			
 			delete($self->{'headerBuffer'});
 			
-			if(defined($subscriberID) && $anyPersist)
+			if(defined($subscriberID) && $persist)
 			{
 				$self->{'subscriberID'}=$subscriberID;
 				$self->deleteSubscriberWithID($subscriberID);
@@ -227,9 +221,9 @@ sub processLine {
 			{
 				$self->emitOKHeader();
 				
-				$self->setChannels($channels);
+				$self->setChannels($channels,$persist);
 				
-				$self->close(1) unless($anyPersist);
+				$self->close(1) unless($persist);
 				
 				return;
 			}
@@ -253,10 +247,10 @@ sub processLine {
 sub setChannels {
 	my $self=shift;
 	my $channels=shift;
+	my $persist=shift;
 	
 	foreach my $channelName (keys %{$channels})
 	{
-		my $persist=$channels->{$channelName}->{'persist'};
 		my $startIndex=$channels->{$channelName}->{'startIndex'};
 		
 		my $channel=Meteor::Channel->channelWithName($channelName);
