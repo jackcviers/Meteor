@@ -19,7 +19,6 @@ Function.prototype.andThen=function(g) {
 
 function Meteor(instID) {
 
-	this.lastmsgreceived = -1;
 	this.transferDoc = false;
 	this.pingtimer = false;
 	this.updatepollfreqtimer = false;
@@ -33,21 +32,20 @@ function Meteor(instID) {
 	this.callback_statuschanged = function() {};
 	this.persist = true;
 	this.frameloadtimer = false;
-	this.frameurl = false;
 	this.debugmode = false;
+	this.subsurl = false;
 
 	// Documented public properties
-	this.channel = false;
+	this.channels = new Array();
 	this.subdomain = "data";
 	this.dynamicpageaddress = "push";
-	this.backtrack = 0;
 	this.smartpoll = true;
 	this.pollfreq = 2000;
 	this.minpollfreq = 2000;
 	this.mode = "poll";
 	this.polltimeout=30000;
-	this.maxmessages=0;
 	this.pingtimeout = 10000;
+	this.maxmessages = 0;
 	this.status = 0;
 
 	/* Statuses:	0 = Uninitialised,
@@ -83,25 +81,48 @@ Meteor.register = function(ifr) {
 	if (this.debugmode) console.log("Frame registered");
 }
 
+Meteor.reset = function(ifr) {
+	instid = new String(ifr.window.frameElement.id);
+	instid = instid.replace(/.*_([0-9]*)$/, "$1");
+	this.instances[instid].reset();
+}
+
+Meteor.prototype.joinChannel = function(channelname, backtrack) {
+	if (typeof(this.channels[channelname]) != "undefined") throw "Cannot join channel "+channelname+": already subscribed";
+	this.channels[channelname] = {backtrack:backtrack, lastmsgreceived:0};
+	if (this.status != 0) this.start();
+}
+
+Meteor.prototype.leaveChannel = function(channelname) {
+	if (typeof(this.channels[channelname]) == "undefined") throw "Cannot leave channel "+channelname+": not subscribed";
+	delete this.channels[channelname];
+	if (this.status != 0) this.start();
+}
+
 Meteor.prototype.start = function() {
 	this.persist = (this.maxmessages)?1:0;
 	this.smartpoll = (this.smartpoll)?1:0;
 	this.mode = (this.mode=="stream")?"stream":"poll";
-	if (!this.subdomain || !this.channel) throw "Channel or Meteor subdomain host not specified";
+	if (!this.subdomain || this.channels.length) throw "Channel or Meteor subdomain host not specified";
 	this.stop();
 	var now = new Date();
 	var t = now.getTime();
 	this.setstatus(1);
-	if (this.mode=="stream") {
-		var surl = "http://"+this.subdomain+"."+location.hostname+"/"+this.dynamicpageaddress+"?channel="+this.channel+"&id="+this.MHostId;
-		if (this.lastmsgreceived >= 0) {
-			surl += "&restartfrom="+this.lastmsgreceived;
-		} else if (this.backtrack > 0) {
-			surl += "&backtrack="+this.backtrack;
-		} else if (this.backtrack < 0 || isNaN(this.backtrack)) {
+	var surl = "http://" + this.subdomain + "." + location.hostname + "/" + this.dynamicpageaddress + "?id=" + this.MHostId;
+	if (this.maxmessages && !this.persist) surl += "&maxmessages=" + this.maxmessages;
+	for (var c in this.channels) {
+		surl += "&channel="+c;
+		if (this.channels[c].lastmsgreceived >= 0) {
+			surl += "&restartfrom="+this.channels[c].lastmsgreceived;
+		} else if (this.channels[c].backtrack > 0) {
+			surl += "&backtrack="+this.channels[c].backtrack;
+		} else if (this.channels[c].backtrack < 0 || isNaN(this.channels[c].backtrack)) {
 			surl += "&restartfrom=";
 		}
-		this.createIframe(surl);
+	}
+	this.subsurl = surl;
+	if (this.mode=="stream") {
+		this.createIframe(this.subsurl);
 		var f = this.pollmode.bind(this);
 		clearTimeout(this.pingtimer);
 		this.pingtimer = setTimeout(f, this.pingtimeout);
@@ -166,17 +187,17 @@ Meteor.prototype.stop = function() {
 
 Meteor.prototype.pollmode = function() {
 	if (this.debugmode) console.log("Ping timeout");
-	this.stop();
 	this.mode="poll";
 	this.start();
 	this.callback_changemode("poll");
 	this.lastpingtime = false;
 }
 
-Meteor.prototype.process = function(id, data, timestamp) {
-	if (id > this.lastmsgreceived) {
-		this.callback_process(data, timestamp);
-		if (id != -1) this.lastmsgreceived = id;
+Meteor.prototype.process = function(id, channel, data) {
+	if (id > this.channels[channel].lastmsgreceived) {
+		if (this.debugmode) console.log("Message "+id+" received on channel "+channel+": "+data);
+		this.callback_process(data);
+		this.channels[channel].lastmsgreceived = id;
 		if (this.mode=="poll") {
 			var now = new Date();
 			var t = now.getTime();
@@ -184,6 +205,7 @@ Meteor.prototype.process = function(id, data, timestamp) {
 			while (this.recvtimes.length > 5) this.recvtimes.shift();
 		}
 	} else if (id == -1) {
+		if (this.debugmode) console.log("Ping");
 		this.ping();
 	}
 	this.setstatus(5);
