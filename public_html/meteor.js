@@ -23,7 +23,7 @@ function Meteor(instID) {
 	this.pingtimer = false;
 	this.updatepollfreqtimer = false;
 	this.lastrequest = 0;
-	this.recvtimes = new Array();
+	this.recvtimes = [];
 	this.MHostId = false;
 	this.callback_process = function() {};
 	this.callback_reset = function() {};
@@ -34,9 +34,9 @@ function Meteor(instID) {
 	this.frameloadtimer = false;
 	this.debugmode = false;
 	this.subsurl = false;
+	this.channels = {};
 
 	// Documented public properties
-	this.channels = new Array();
 	this.subdomain = "data";
 	this.dynamicpageaddress = "push";
 	this.smartpoll = true;
@@ -90,6 +90,8 @@ Meteor.reset = function(ifr) {
 Meteor.prototype.joinChannel = function(channelname, backtrack) {
 	if (typeof(this.channels[channelname]) != "undefined") throw "Cannot join channel "+channelname+": already subscribed";
 	this.channels[channelname] = {backtrack:backtrack, lastmsgreceived:0};
+	if (this.debugmode) console.log("Joined channel "+channelname+", channel list follows");
+	if (this.debugmode) console.log(this.channels);
 	if (this.status != 0) this.start();
 }
 
@@ -194,8 +196,11 @@ Meteor.prototype.pollmode = function() {
 }
 
 Meteor.prototype.process = function(id, channel, data) {
-	if (id > this.channels[channel].lastmsgreceived) {
-		if (this.debugmode) console.log("Message "+id+" received on channel "+channel+": "+data);
+	if (id == -1) {
+		if (this.debugmode) console.log("Ping");
+		this.ping();
+	} else if (typeof(this.channels[channel]) != "undefined" && id > this.channels[channel].lastmsgreceived) {
+		if (this.debugmode) console.log("Message "+id+" received on channel "+channel+" (last id on channel: "+this.channels[channel].lastmsgreceived+")\n"+data);
 		this.callback_process(data);
 		this.channels[channel].lastmsgreceived = id;
 		if (this.mode=="poll") {
@@ -204,9 +209,6 @@ Meteor.prototype.process = function(id, channel, data) {
 			this.recvtimes[this.recvtimes.length] = t;
 			while (this.recvtimes.length > 5) this.recvtimes.shift();
 		}
-	} else if (id == -1) {
-		if (this.debugmode) console.log("Ping");
-		this.ping();
 	}
 	this.setstatus(5);
 }
