@@ -145,7 +145,6 @@ Meteor.prototype.createIframe = function(url) {
 		this.transferDoc.write("<html>");
 		this.transferDoc.write("<script>document.domain=\""+(document.domain)+"\";</"+"script>");
 		this.transferDoc.write("</html>");
-		var selfref = this;
 		this.transferDoc.parentWindow.Meteor = Meteor;
 		this.transferDoc.close();
 		var ifrDiv = this.transferDoc.createElement("div");

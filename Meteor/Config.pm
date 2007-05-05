@@ -81,8 +81,8 @@ package Meteor::Config;
 'Maximum duration in seconds for a subscriber connection to exist before forcing a it to close. Note that the server checks for expired connections in 60 second intervals, so small changes to this value will not have much of an effect. Use 0 to disable',
 	MaxTime					=> 0,
 
-'Message template, ~text~, ~id~ and ~timestamp~ will be replaced by the appropriate values',
-	MessageTemplate			=> '<script>p(~id~,"~text~");</script>\r\n',
+'Message template, ~text~, ~id~, ~channel~ and ~timestamp~ will be replaced by the appropriate values',
+	MessageTemplate			=> '<script>p(~id~,"~channel~","~text~");</script>\r\n',
 
 'Interval at which PingMessage is sent to all persistent and identified subscriber connections (ie those including id=someuniqueidentifier in their request, and not specifying persist=0). Must be at least 3 if set higher than zero. Set to zero to disable.',
 	PingInterval			=> 5,
