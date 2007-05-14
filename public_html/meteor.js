@@ -194,9 +194,9 @@ Meteor.prototype.stop = function() {
 		document.getElementById("meteorframe_"+this.instID).src="about:blank";
 		document.body.removeChild(document.getElementById("meteorframe_"+this.instID));
 	}
-	if (!isNaN(this.pingtimer)) clearTimeout(this.pingtimer);
-	if (!isNaN(this.updatepollfreqtimer)) clearTimeout(this.updatepollfreqtimer);
-	if (!isNaN(this.frameloadtimer)) clearTimeout(this.frameloadtimer);
+	clearTimeout(this.pingtimer);
+	clearTimeout(this.updatepollfreqtimer);
+	clearTimeout(this.frameloadtimer);
 	this.setstatus(0);
 }
 
