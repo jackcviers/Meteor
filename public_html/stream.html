@@ -43,14 +43,7 @@ function newXmlHttp() {
 function startstream() {
 	streamreq = newXmlHttp();
 	byteoffset = 0;
-	var url = "http://"+location.hostname+"/push?channel="+get("channel")+"&id="+get("MHostId")+"&template=2";
-	if (get("lastmsgreceived") >= 0) {
-		url += "&restartfrom="+(get("lastmsgreceived")+1);
-	} else if (get("backtrack") > 0) {
-		url += "&backtrack="+get("backtrack");
-	} else if (typeof(get("backtrack")) != "number") {
-		url += "&restartfrom=";
-	}
+	var url = get("subsurl")+"&template=2";
 	var now = new Date();
 	var t = now.getTime();
 	url += "&nocache="+t;

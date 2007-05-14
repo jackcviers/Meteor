@@ -35,6 +35,9 @@ function Meteor(instID) {
 	this.debugmode = false;
 	this.subsurl = false;
 	this.channels = {};
+	this.channelcount = 0;
+	this.streamreq = false;
+	this.byteoffset = 0;
 
 	// Documented public properties
 	this.subdomain = "data";
@@ -93,19 +96,21 @@ Meteor.prototype.joinChannel = function(channelname, backtrack) {
 	if (this.debugmode) console.log("Joined channel "+channelname+", channel list follows");
 	if (this.debugmode) console.log(this.channels);
 	if (this.status != 0) this.start();
+	this.channelcount++;
 }
 
 Meteor.prototype.leaveChannel = function(channelname) {
 	if (typeof(this.channels[channelname]) == "undefined") throw "Cannot leave channel "+channelname+": not subscribed";
 	delete this.channels[channelname];
 	if (this.status != 0) this.start();
+	this.channelcount--;
 }
 
 Meteor.prototype.start = function() {
 	this.persist = (this.maxmessages)?1:0;
 	this.smartpoll = (this.smartpoll)?1:0;
 	this.mode = (this.mode=="stream")?"stream":"poll";
-	if (!this.subdomain || this.channels.length) throw "Channel or Meteor subdomain host not specified";
+	if (!this.subdomain || !this.channelcount) throw "Channel or Meteor subdomain host not specified";
 	this.stop();
 	var now = new Date();
 	var t = now.getTime();
@@ -114,7 +119,7 @@ Meteor.prototype.start = function() {
 	if (this.maxmessages && !this.persist) surl += "&maxmessages=" + this.maxmessages;
 	for (var c in this.channels) {
 		surl += "&channel="+c;
-		if (this.channels[c].lastmsgreceived >= 0) {
+		if (this.channels[c].lastmsgreceived > 0) {
 			surl += "&restartfrom="+this.channels[c].lastmsgreceived;
 		} else if (this.channels[c].backtrack > 0) {
 			surl += "&backtrack="+this.channels[c].backtrack;
@@ -124,7 +129,11 @@ Meteor.prototype.start = function() {
 	}
 	this.subsurl = surl;
 	if (this.mode=="stream") {
-		this.createIframe(this.subsurl);
+		if (document.all) {
+			this.createIframe(this.subsurl);
+		} else {
+			this.createIframe("http://"+this.subdomain+"."+location.hostname+"/stream.html");
+		}
 		var f = this.pollmode.bind(this);
 		clearTimeout(this.pingtimer);
 		this.pingtimer = setTimeout(f, this.pingtimeout);
@@ -161,11 +170,16 @@ Meteor.prototype.createIframe = function(url) {
 		ifr.style.zIndex = "-20";
 		ifr.setAttribute("id", "meteorframe_"+this.instID);
 		ifr.Meteor = Meteor;
-		var innerifr = document.createElement("IFRAME");
-		innerifr.setAttribute("src", url);
-		innerifr.setAttribute("id", "meteorinnerframe_"+this.instID);
-		ifr.appendChild(innerifr);
-		document.body.appendChild(ifr);
+		if (document.compatMode=='CSS1Compat') {
+			var innerifr = document.createElement("IFRAME");
+			innerifr.setAttribute("src", url);
+			innerifr.setAttribute("id", "meteorinnerframe_"+this.instID);
+			ifr.appendChild(innerifr);
+			document.body.appendChild(ifr);
+		} else {
+			ifr.setAttribute("src", url);
+			document.body.appendChild(ifr);
+		}
 	}
 	if (this.debugmode) console.log("Loading URL '"+url+"' into frame...");
 	var f = this.frameloadtimeout.bind(this);
@@ -291,6 +305,7 @@ Meteor.prototype.setstatus = function(newstatus) {
 		this.callback_statuschanged(newstatus);
 	}
 }
+
 
 Meteor.createCookie = function(name,value,days) {
 	if (days) {
