@@ -46,7 +46,7 @@ function Meteor(instID) {
 	this.pollfreq = 2000;
 	this.minpollfreq = 2000;
 	this.mode = "poll";
-	this.polltimeout=30000;
+	this.polltimeout = 30000;
 	this.pingtimeout = 10000;
 	this.maxmessages = 0;
 	this.status = 0;
@@ -115,19 +115,7 @@ Meteor.prototype.start = function() {
 	var now = new Date();
 	var t = now.getTime();
 	this.setstatus(1);
-	var surl = "http://" + this.subdomain + "." + location.hostname + "/" + this.dynamicpageaddress + "?id=" + this.MHostId;
-	if (this.maxmessages && !this.persist) surl += "&maxmessages=" + this.maxmessages;
-	for (var c in this.channels) {
-		surl += "&channel="+c;
-		if (this.channels[c].lastmsgreceived > 0) {
-			surl += "&restartfrom="+this.channels[c].lastmsgreceived;
-		} else if (this.channels[c].backtrack > 0) {
-			surl += "&backtrack="+this.channels[c].backtrack;
-		} else if (this.channels[c].backtrack < 0 || isNaN(this.channels[c].backtrack)) {
-			surl += "&restartfrom=";
-		}
-	}
-	this.subsurl = surl;
+	this.updateSubsUrl();
 	if (this.mode=="stream") {
 		if (document.all) {
 			this.createIframe(this.subsurl);
@@ -139,12 +127,30 @@ Meteor.prototype.start = function() {
 		this.pingtimer = setTimeout(f, this.pingtimeout);
 
 	} else {
-		this.createIframe("http://"+this.subdomain+"."+location.hostname+"/poll.html");
+		this.createIframe("http://"+this.subdomain+"."+location.hostname+"/poll.html&nc="+t);
 		this.recvtimes[0] = t;
 		if (this.updatepollfreqtimer) clearTimeout(this.updatepollfreqtimer);
 		this.updatepollfreqtimer = setInterval(this.updatepollfreq.bind(this), 2500);
 	}
 	this.lastrequest = t;
+}
+
+Meteor.prototype.updateSubsUrl = function() {
+	var surl = "http://" + this.subdomain + "." + location.hostname + "/" + this.dynamicpageaddress + "?id=" + this.MHostId;
+	if (this.maxmessages && this.persist && this.mode != "stream") surl += "&maxmessages=" + this.maxmessages;
+	if (this.mode == "poll" && this.maxmessages == 0 && this.persist==1) this.persist=0;
+	surl += "&persist="+this.persist;
+	for (var c in this.channels) {
+		surl += "&channel="+c;
+		if (this.channels[c].lastmsgreceived > 0) {
+			surl += "&restartfrom="+(this.channels[c].lastmsgreceived+1);
+		} else if (this.channels[c].backtrack > 0) {
+			surl += "&backtrack="+this.channels[c].backtrack;
+		} else if (this.channels[c].backtrack < 0 || isNaN(this.channels[c].backtrack)) {
+			surl += "&restartfrom=";
+		}
+	}
+	this.subsurl = surl;
 }
 
 Meteor.prototype.createIframe = function(url) {
@@ -223,6 +229,7 @@ Meteor.prototype.process = function(id, channel, data) {
 			while (this.recvtimes.length > 5) this.recvtimes.shift();
 		}
 	}
+	this.updateSubsUrl();
 	this.setstatus(5);
 }
 

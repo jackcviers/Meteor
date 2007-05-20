@@ -49,19 +49,21 @@ function poll() {
 	var byteoffset = 0;
 	var newdata;
 	document.domain = topdomain;
-	var url = get("subsurl")+"&persist="+get("persist")+"&template=2";
-	var now = new Date();
-	var t = now.getTime();
-	url += "&nocache="+t;
-	try {
-		document.domain = thisdomain;
-	} catch (e) {}
-	pollreq = newXmlHttp();
-	pollreq.onreadystatechange = handleresponse;
-	pollreq.open("GET", url, true);
-	lastrequesttime = t;
-	if (get("polltimeout")) polltimer = setTimeout(ptimeout, get("polltimeout"));
-	pollreq.send(null);
+	var url = get("subsurl");
+	if (typeof(url)!="undefined") {
+		var now = new Date();
+		var t = now.getTime();
+		url += "&template=2&nocache="+t;
+		try {
+			document.domain = thisdomain;
+		} catch (e) {}
+		pollreq = newXmlHttp();
+		pollreq.onreadystatechange = handleresponse;
+		pollreq.open("GET", url, true);
+		lastrequesttime = t;
+		if (get("polltimeout")) polltimer = setTimeout(ptimeout, get("polltimeout"));
+		pollreq.send(null);
+	}
 	document.domain=topdomain;
 }
 
