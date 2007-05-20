@@ -96,6 +96,8 @@ sub newFromServer {
 	#
 	my $self=shift->new();
 	
+	$::Statistics->{'total_requests'}++;
+	
 	my $server=shift;
 	my $socket=$server->conSocket();
 	
@@ -180,6 +182,7 @@ sub checkHandleBits {
 		my $bytesRead=sysread($socket->{'handle'},$buffer,$MAX_READ_SIZE);
 		if(defined($bytesRead) && $bytesRead>0)
 		{
+			$::Statistics->{'total_inbound_bytes'}+=$bytesRead;
 			$self->{'readBuffer'}.=$buffer;
 			while($self->{'readBuffer'}=~s/^([^\r\n]*)\r?\n//)
 			{
@@ -218,6 +221,7 @@ sub checkHandleBits {
 		
 		if(defined($bytesWritten) && $bytesWritten>0)
 		{
+			$::Statistics->{'total_outbound_bytes'}+=$bytesWritten;
 			$self->{'writeBuffer'}=substr($self->{'writeBuffer'},$bytesWritten);
 			if(length($self->{'writeBuffer'})==0)
 			{

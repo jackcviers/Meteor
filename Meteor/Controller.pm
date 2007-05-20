@@ -38,8 +38,23 @@ package Meteor::Controller;
 	
 	use Meteor::Connection;
 	use Meteor::Channel;
+	use Meteor::Subscriber;
 	
 	@Meteor::Controller::ISA=qw(Meteor::Connection);
+
+###############################################################################
+# Factory methods
+###############################################################################
+sub newFromServer {
+	my $class=shift;
+	
+	my $self=$class->SUPER::newFromServer(shift);
+	
+	$::Statistics->{'current_controllers'}++;
+	$::Statistics->{'controller_connections_accepted'}++;
+	
+	$self;
+}
 
 ###############################################################################
 # Instance methods
@@ -55,7 +70,7 @@ sub processLine {
 	# COUNTSUBSCRIBERS channel1
 	# < OK 344
 	
-	unless($line=~s/^(ADDMESSAGE|COUNTSUBSCRIBERS|LISTCHANNELS|QUIT)//)
+	unless($line=~s/^(ADDMESSAGE|COUNTSUBSCRIBERS|LISTCHANNELS|SHOWSTATS|QUIT)//)
 	{
 		$self->write("ERR Invalid command syntax$::CRLF");
 		
@@ -69,7 +84,7 @@ sub processLine {
 		unless($line=~s/^\s+(\S+)\s//)
 		{
 			$self->write("ERR Invalid command syntax$::CRLF");
-
+			
 			return;
 		}
 		
@@ -83,7 +98,7 @@ sub processLine {
 		unless($line=~s/^\s+(\S+)$//)
 		{
 			$self->write("ERR Invalid command syntax$::CRLF");
-
+			
 			return;
 		}
 		
@@ -99,11 +114,28 @@ sub processLine {
 		unless($line eq '')
 		{
 			$self->write("ERR Invalid command syntax$::CRLF");
-
+			
 			return;
 		}
 		
 		my $txt="OK$::CRLF".Meteor::Channel->listChannels()."--EOT--$::CRLF";
+		
+		$self->write($txt);
+	}
+	elsif($cmd eq 'SHOWSTATS')
+	{
+		# uptime
+		my $uptime=time-$::STARTUP_TIME;
+		my $txt="uptime: $uptime$::CRLF";
+		
+		# channel_count
+		my $numChannels=Meteor::Channel->numChannels();
+		$txt.="channel_count: $numChannels$::CRLF";
+		
+		foreach my $key (keys %{$::Statistics})
+		{
+			$txt.=$key.': '.$::Statistics->{$key}.$::CRLF;
+		}
 		
 		$self->write($txt);
 	}
@@ -112,7 +144,7 @@ sub processLine {
 		unless($line eq '')
 		{
 			$self->write("ERR Invalid command syntax$::CRLF");
-
+			
 			return;
 		}
 		
@@ -138,6 +170,8 @@ sub close {
 			$self->write($msg);
 		}
 	}
+	
+	$::Statistics->{'current_controllers'}--;
 	
 	$self->SUPER::close();
 }

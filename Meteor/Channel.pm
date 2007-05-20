@@ -99,6 +99,11 @@ sub clearAllBuffers {
 	map { $_->clearBuffer() } (values %Channels);
 }
 
+sub numChannels {
+	
+	return scalar(keys %Channels);
+}
+
 ###############################################################################
 # Factory methods
 ###############################################################################
@@ -160,14 +165,16 @@ sub addSubscriber {
 	
 	$startIndex=0 if($startIndex<0);
 	
+	my $numMsgToSend=0;
 	while($startIndex<$msgCount)
 	{
 		my $message=$self->{'messages'}->[$startIndex++];
 		
 		$txt.=$message->message();
+		$numMsgToSend++;
 	}
 	
-	$subscriber->sendMessage($txt);
+	$subscriber->sendMessage($txt,$numMsgToSend);
 }
 
 sub removeSubscriber {

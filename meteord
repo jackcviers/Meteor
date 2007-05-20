@@ -63,6 +63,12 @@
 ###############################################################################
 	
 	#
+	# Record startup time
+	# 
+	$::STARTUP_TIME=time;
+	$::STARTUP_TIME+=0; # avoid warning
+	
+	#
 	# Program name
 	#
 	$::PGM=$0;

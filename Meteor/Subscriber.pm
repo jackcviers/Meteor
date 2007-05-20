@@ -43,6 +43,7 @@ package Meteor::Subscriber;
 	@Meteor::Subscriber::ISA=qw(Meteor::Connection);
 	
 	our %PersistentConnections=();
+	our $NumAcceptedConnections=0;
 
 ###############################################################################
 # Factory methods
@@ -62,6 +63,9 @@ sub newFromServer {
 	{
 		$self->{'ConnectionTimeLimit'}=$self->{'ConnectionStart'}+$maxTime;
 	}
+	
+	$::Statistics->{'current_subscribers'}++;
+	$::Statistics->{'subscriber_connections_accepted'}++;
 	
 	$self;
 }
@@ -95,6 +99,11 @@ sub checkPersistentConnectionsForMaxTime {
 	my @cons=values %PersistentConnections;
 	
 	map { $_->checkForMaxTime($time) } @cons;
+}
+
+sub numSubscribers {
+	
+	return scalar(keys %PersistentConnections);
 }
 
 ###############################################################################
@@ -271,6 +280,7 @@ sub emitErrorHeader {
 	my $self=shift;
 	
 	$self->emitHeader('404 Not Found');
+	$::Statistics->{'errors_served'}++;
 	
 	# close up shop here!
 	$self->close();
@@ -318,8 +328,13 @@ sub emitHeader {
 sub sendMessage {
 	my $self=shift;
 	my $msg=shift;
+	my $numMsgInThisBatch=shift;
+	
+	$numMsgInThisBatch=1 unless(defined($numMsgInThisBatch));
 	
 	$self->write($msg);
+	
+	$::Statistics->{'messages_served'}+=$numMsgInThisBatch;
 	
 	my $msgCount=++$self->{'MessageCount'};
 	
@@ -377,6 +392,8 @@ sub close {
 			$self->write($msg);
 		}
 	}
+	
+	$::Statistics->{'current_subscribers'}--;
 	
 	$self->SUPER::close();
 }
