@@ -127,7 +127,7 @@ Meteor.prototype.start = function() {
 		this.pingtimer = setTimeout(f, this.pingtimeout);
 
 	} else {
-		this.createIframe("http://"+this.subdomain+"."+location.hostname+"/poll.html&nc="+t);
+		this.createIframe("http://"+this.subdomain+"."+location.hostname+"/poll.html?nc="+t);
 		this.recvtimes[0] = t;
 		if (this.updatepollfreqtimer) clearTimeout(this.updatepollfreqtimer);
 		this.updatepollfreqtimer = setInterval(this.updatepollfreq.bind(this), 2500);
