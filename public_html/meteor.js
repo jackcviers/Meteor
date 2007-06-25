@@ -30,7 +30,7 @@ function Meteor(instID) {
 	this.callback_eof = function() {};
 	this.callback_changemode = function() {};
 	this.callback_statuschanged = function() {};
-	this.persist = true;
+	this.persist = 1;
 	this.frameloadtimer = false;
 	this.debugmode = false;
 	this.subsurl = false;
@@ -42,10 +42,10 @@ function Meteor(instID) {
 	// Documented public properties
 	this.subdomain = "data";
 	this.dynamicpageaddress = "push";
-	this.smartpoll = true;
+	this.smartpoll = 1;
 	this.pollfreq = 2000;
 	this.minpollfreq = 2000;
-	this.mode = "poll";
+	this.mode = "stream";
 	this.polltimeout = 30000;
 	this.pingtimeout = 10000;
 	this.maxmessages = 0;
@@ -107,7 +107,7 @@ Meteor.prototype.leaveChannel = function(channelname) {
 }
 
 Meteor.prototype.start = function() {
-	this.persist = (this.maxmessages)?1:0;
+	this.persist = (this.persist)?1:0;
 	this.smartpoll = (this.smartpoll)?1:0;
 	this.mode = (this.mode=="stream")?"stream":"poll";
 	if (!this.subdomain || !this.channelcount) throw "Channel or Meteor subdomain host not specified";
@@ -136,9 +136,11 @@ Meteor.prototype.start = function() {
 }
 
 Meteor.prototype.updateSubsUrl = function() {
+
+	// If streaming or long polling, connection should persist
+	this.persist = (this.mode == "stream" || (this.mode=='poll' && this.maxmessages > 0)) ? 1 : 0;
 	var surl = "http://" + this.subdomain + "." + location.hostname + "/" + this.dynamicpageaddress + "?id=" + this.MHostId;
-	if (this.maxmessages && this.persist && this.mode != "stream") surl += "&maxmessages=" + this.maxmessages;
-	if (this.mode == "poll" && this.maxmessages == 0 && this.persist==1) this.persist=0;
+	if (this.persist && this.mode != "stream") surl += "&maxmessages=" + this.maxmessages;
 	surl += "&persist="+this.persist;
 	for (var c in this.channels) {
 		surl += "&channel="+c;
