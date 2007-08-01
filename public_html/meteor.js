@@ -156,7 +156,9 @@ Meteor.prototype.updateSubsUrl = function() {
 }
 
 Meteor.prototype.createIframe = function(url) {
-	if (document.all) {
+	delete this.transferDoc;
+	if (document.all) try { this.transferDoc = new ActiveXObject("htmlfile") } catch(ex) { this.transferDoc = null }
+	if (document.all && this.transferDoc) {
 		this.transferDoc = new ActiveXObject("htmlfile");
 		this.transferDoc.open();
 		this.transferDoc.write("<html>");
