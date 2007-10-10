@@ -121,6 +121,7 @@ function guard() {
 		delete pollreq;
 		clearTimeout(polltimer);
 	}
+	setTimeout('guard()', 1000);
 }
 
 poll();
