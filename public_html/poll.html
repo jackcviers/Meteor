@@ -114,7 +114,18 @@ function ptimeout() {
 	setTimeout(poll, x);
 }
 
+function guard() {
+	var url = get("subsurl");
+	if (typeof(url)=="undefined") {
+		pollreq.abort();
+		delete pollreq;
+		clearTimeout(polltimer);
+	}
+}
+
 poll();
+guard();
+
 
 </script>
 </body>

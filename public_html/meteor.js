@@ -90,6 +90,13 @@ Meteor.reset = function(ifr) {
 	this.instances[instid].reset();
 }
 
+window.onunload = function() {
+	for (var i in Meteor.instances) {
+		if (Meteor.instances[i].transferDoc) delete Meteor.instances[i].transferDoc;
+	}
+}
+
+
 Meteor.prototype.joinChannel = function(channelname, backtrack) {
 	if (typeof(this.channels[channelname]) != "undefined") throw "Cannot join channel "+channelname+": already subscribed";
 	this.channels[channelname] = {backtrack:backtrack, lastmsgreceived:0};
@@ -159,6 +166,7 @@ Meteor.prototype.createIframe = function(url) {
 	delete this.transferDoc;
 	if (document.all) try { this.transferDoc = new ActiveXObject("htmlfile") } catch(ex) { this.transferDoc = null }
 	if (document.all && this.transferDoc) {
+		this.transferDoc = new ActiveXObject("htmlfile");
 		this.transferDoc.open();
 		this.transferDoc.write("<html>");
 		this.transferDoc.write("<script>document.domain=\""+(document.domain)+"\";</"+"script>");
