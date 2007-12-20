@@ -68,27 +68,12 @@ sub emitHeaderToClient {
 	my $self=shift;
 	my $client=shift;
 	my $status=shift;
+	my $length=shift;
+	my $contenttype=shift;
+	$length = 0 unless ($length);
+	$contenttype = "text/html" unless ($contenttype);
 	
-	my $header=$::CONF{'DocumentHeaderTemplate'};
-	
-	$header=~s/~([^~]+)~/
-		if(!defined($1) || $1 eq '')
-		{
-			'~';
-		}
-		elsif($1 eq 'server')
-		{
-			$::PGM;
-		}
-		elsif($1 eq 'status')
-		{
-			$status;
-		}
-		else
-		{
-			'';
-		}
-	/gex;
+	my $header="HTTP/1.1 ".$status."\r\nServer: ".$::PGM."\r\nContent-Type: ".$contenttype."; charset=utf-8\r\nPragma: no-cache\r\nCache-Control: no-cache, no-store, must-revalidate\r\nExpires: Thu, 1 Jan 1970 00:00:00 GMT\r\nContent-length: ".$length."\r\n\r\n";
 	
 	$client->write($header);
 }
@@ -248,10 +233,15 @@ sub newDocument {
 sub serveTo {
 	my $self=shift;
 	my $client=shift;
+	my $ct = "text/html";
+	if ($self->{'path'} =~/\.(js)$/) {
+		$ct = "text/javascript";
+	}
 	
-	$self->emitHeaderToClient($client,'200 OK');
+	$self->emitHeaderToClient($client,'200 OK',$self->{'size'}, $ct);
 	
 	$client->write($self->{'document'});
+
 }
 
 sub path {

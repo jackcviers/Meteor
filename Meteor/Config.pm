@@ -60,9 +60,6 @@ package Meteor::Config;
 'Name of index file to serve when a directory is requested from the static file web server',
 	DirectoryIndex	=> 'index.html',
 
-'Header to be served with static documents. ~server~ and ~status~ will be replaced by the appropriate values',
-	DocumentHeaderTemplate			=> 'HTTP/1.1 ~status~\r\nServer: ~server~\r\nContent-Type: text/html; charset=utf-8\r\nPragma: no-cache\r\nCache-Control: no-cache, no-store, must-revalidate\r\nExpires: Thu, 1 Jan 1970 00:00:00 GMT\r\n\r\n',
-
 'Header template, ~server~, ~servertime~ and ~status~ will be replaced by the appropriate values.  **NOTE**: It is possible to define more than one HeaderTemplate by appending a number at the end, for example *HeaderTemplate42*. Clients can request a specific header to be used by adding the parameter template=<number> to their GET request. If *HeaderTemplate<number>* is not found, the system will use the default HeaderTemplate (no number)',
 	HeaderTemplate			=> 'HTTP/1.1 ~status~\r\nServer: ~server~\r\nContent-Type: text/html; charset=utf-8\r\nPragma: no-cache\r\nCache-Control: no-cache, no-store, must-revalidate\r\nExpires: Thu, 1 Jan 1970 00:00:00 GMT\r\n\r\n<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">\r\n<meta http-equiv="Cache-Control" content="no-store">\r\n<meta http-equiv="Cache-Control" content="no-cache">\r\n<meta http-equiv="Pragma" content="no-cache">\r\n<meta http-equiv="Expires" content="Thu, 1 Jan 1970 00:00:00 GMT">\r\n<script type="text/javascript">\r\nwindow.onError = null;\r\nvar domainparts = document.domain.split(".");\r\ndocument.domain = domainparts[domainparts.length-2]+"."+domainparts[domainparts.length-1];\r\nparent.Meteor.register(this);\r\n</script>\r\n</head>\r\n<body onload="try { parent.Meteor.reset(this) } catch (e) {}">\r\n',
 

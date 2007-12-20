@@ -8,88 +8,58 @@ parent.Meteor.register(this);
 var streamreq;
 var byteoffset;
 
-Function.prototype.bind = function(obj) {
-	var method = this,
-	temp = function() {
-		return method.apply(obj, arguments);
-	};
-	return temp;
-}
-
 function abort() {
 	streamreq.abort();
 }
 
 function newXmlHttp() {
-	var xmlhttp;
-	/*@cc_on @*/
-	/*@if (@_jscript_version >= 5)
-	try {
-		xmlhttp = new ActiveXObject("Msxml2.XMLHTTP");
-	} catch (e) {
-		try {
-			xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
-		} catch (E) {
-			xmlhttp = false;
-		}
-	}
-	@end @*/
-	if (!xmlhttp && typeof XMLHttpRequest!='undefined') {
-		xmlhttp = new XMLHttpRequest();
-	}
-	return xmlhttp;
+    try { return new ActiveXObject("Msxml2.XMLHTTP"); } catch (e) {}
+    try { return new ActiveXObject("Microsoft.XMLHTTP"); } catch (e) {}
+    try { return new XMLHttpRequest(); } catch(e) {}
+    return null;
 }
 
 function startstream() {
 	streamreq = newXmlHttp();
 	byteoffset = 0;
-	var url = get("subsurl")+"&template=2";
-	var now = new Date();
-	var t = now.getTime();
-	url += "&nocache="+t;
+	var url = parent.Meteor.getSubsUrl();
 	streamreq.open("GET", url, true);
-	streamreq.onreadystatechange = handleresponse.bind(streamreq);
+	streamreq.onreadystatechange = function() {
+		if (typeof streamreq == "undefined") return;
+		if (streamreq.readyState == 3) {
+			var buffer = streamreq.responseText;
+			var newdata = buffer.substring(byteoffset);
+			byteoffset = buffer.length;
+			while (1) {
+				var x = newdata.indexOf("<s"+"cript>p(");
+				if (x != -1) {
+					y = newdata.indexOf("</"+"script>", x);
+					if (y != -1) {
+						eval(newdata.substring((x+8),y));
+						newdata = newdata.substring(y+9);
+					} else {
+
+						// Last message is incomplete.  Ignore it and it will be fetched again
+						break;
+					}
+				} else {
+
+					// No more messages
+					break;
+				}
+			}
+			byteoffset = buffer.length-newdata.length;
+		} else if (streamreq.readyState == 4) {
+			delete streamreq;
+			if (typeof(r)=="function") {
+				r();
+			}
+		}
+	}
 	streamreq.send(null);
 }
 
-function handleresponse() {
-	if (this.readyState == 3) {
-		var buffer = this.responseText;
-		var newdata = buffer.substring(byteoffset);
-		byteoffset = buffer.length;
-		var x = newdata.indexOf("parent.Meteor.setServerTime(");
-		if (x != -1) {
-			y = newdata.indexOf(");", x);
-			if (y != -1) eval(newdata.substring(x,y+2));
-		}
-		while (1) {
-			var x = newdata.indexOf("<s"+"cript>p(");
-			if (x != -1) {
-				y = newdata.indexOf("</"+"script>", x);
-				if (y != -1) {
-					eval(newdata.substring((x+8),y));
-					newdata = newdata.substring(y+9);
-				} else {
 
-					// Last message is corrupt or incomplete.  Ignore it and it will be fetched again
-					break;
-				}
-			} else {
-
-				// No more messages
-				break;
-			}
-		}
-		byteoffset = buffer.length-newdata.length;
-	} else if (this.readyState == 4) {
-		delete streamreq;
-		if (typeof(startstream)=="function") {
-			startstream();
-		} else if (typeof(r)=="function") {
-			r();
-		}
-	}
-}
 
 startstream();
 </script>

@@ -130,96 +130,46 @@ sub processLine {
 		# Analyze header, register with appropiate channel
 		# and send pending messages.
 		#
-		# GET $::CONF{'SubscriberDynamicPageAddress'}?channel=ml123&restartfrom=1 HTTP/1.1
+		# GET $::CONF{'SubscriberDynamicPageAddress'}/hostid/streamtype/channeldefs HTTP/1.1
 		#
 		# Find the 'GET' line
 		#
-		if($self->{'headerBuffer'}=~/GET\s+$::CONF{'SubscriberDynamicPageAddress'}\?(\S+)/)
+		if($self->{'headerBuffer'}=~/GET\s+$::CONF{'SubscriberDynamicPageAddress'}\/([0-9a-z]+)\/([0-9a-z]+)\/(\S+)/i)
 		{
-			my @formData=split('&',$1);
-			my $channelName=undef;
-			my $startIndex=undef;
-			my $backtrack=undef;
-			my $persist=1;
-			my $subscriberID=undef;
-			my $channels={};
-			foreach my $formElement (@formData)
-			{
-				if($formElement=~/^channel=(.+)$/)
-				{
-					if(defined($channelName))
-					{
-						if(defined($startIndex) && defined($backtrack))
-						{
-							$self->emitHeader("404 Cannot use both 'restartfrom' and 'backtrack'");
-							$self->close();
-							
-							return;
-						}
-						
-						$startIndex=-$backtrack if(!defined($startIndex) && defined($backtrack));
-						$channels->{$channelName}->{'startIndex'}=$startIndex;
-						
-						$startIndex=undef;
-						$backtrack=undef;
-					}
-					$channelName=$1;
-				}
-				elsif($formElement=~/^restartfrom=(\d*)$/)
-				{
-					$startIndex=$1;
-					$startIndex='' unless(defined($startIndex));
-				}
-				elsif($formElement=~/^backtrack=(\d+)$/)
-				{
-					$backtrack=$1;
-					$backtrack=0 unless(defined($backtrack));
-				}
-				elsif($formElement=~/^persist=(?i)(yes|true|1|no|false|0)$/)
-				{
-					$persist=0 if($1=~/(no|false|0)/i);
-				}
-				elsif($formElement=~/^id=(.+)$/)
-				{
-					$subscriberID=$1;
-				}
-				elsif($formElement=~/^maxmessages=(\d+)$/i)
-				{
-					$self->{'MaxMessageCount'}=$1;
-				}
-				elsif($formElement=~/^template=(\d+)$/i)
-				{
-					$self->{'HeaderTemplateNumber'}=$1;
-				}
-				elsif($formElement=~/^maxtime=(\d+)$/i)
-				{
-					my $clientRequest=$1;
-					my $serverDefault=$::CONF{'MaxTime'};
-					
-					if($serverDefault==0 || $serverDefault>$clientRequest)
-					{
-						$self->{'ConnectionTimeLimit'}=$self->{'ConnectionStart'}+$clientRequest;
-					}
-				}
+			my $subscriberID=$1;
+			my $persist=0;
+			$self->{'mode'}=$2;
+			if ($self->{'mode'} eq "xhrinteractive" || $self->{'mode'} eq "iframe" || $self->{'mode'} eq "serversent" || $self->{'mode'} eq "longpoll") {
+				$persist=1;
+				$self->{'MaxMessageCount'}=1 unless(!($self->{'mode'} eq "longpoll"));
 			}
-			
-			if(defined($channelName))
+			if ($self->{'mode'} eq "iframe") {
+				$self->{'HeaderTemplateNumber'}=1;
+			} else {
+				$self->{'HeaderTemplateNumber'}=2;
+			}
+			my @channelData=split('/',$3);
+			my $channels={};
+			my $channelName;
+			my $offset;
+			foreach my $chandef (@channelData)
 			{
-				if(defined($startIndex) && defined($backtrack))
+				if($chandef=~/^([a-z0-9]+)(.(r|b|h)([0-9]*))?$/)
 				{
-					$self->emitHeader("404 Cannot use both 'restartfrom' and 'backtrack'");
-					$self->close();
-					
-					return;
+					$channelName = $1;
+					$channels->{$channelName}->{'startIndex'} = undef;
+					for ($3) {
+						$offset = $4;
+						/r/ && do { $channels->{$channelName}->{'startIndex'} = $offset; last; };
+						/b/ && do { $channels->{$channelName}->{'startIndex'} = -$offset; last; };
+						/h/ && do { $channels->{$channelName}->{'startIndex'} = 0; last; };
+					}
 				}
-				
-				$startIndex=-$backtrack if(!defined($startIndex) && defined($backtrack));
-				$channels->{$channelName}->{'startIndex'}=$startIndex;
 			}
 			
 			delete($self->{'headerBuffer'});
 			
-			if(defined($subscriberID) && $persist)
+			if($persist)
 			{
 				$self->{'subscriberID'}=$subscriberID;
 				$self->deleteSubscriberWithID($subscriberID);
@@ -229,20 +179,22 @@ sub processLine {
 			if(scalar(keys %{$channels}))
 			{
 				$self->emitOKHeader();
-				
 				$self->setChannels($channels,$persist);
-				
 				$self->close(1) unless($persist);
-				
 				return;
 			}
+		}
+		elsif($self->{'headerBuffer'}=~/GET\s+\/disconnect\/(\S+)/)
+		{
+			$self->deleteSubscriberWithID($1);
+			$self->emitOKHeader();
+			$self->close(1);
+			return;
 		}
 		elsif($self->{'headerBuffer'}=~/GET\s+([^\s\?]+)/)
 		{
 			Meteor::Document->serveFileToClient($1,$self);
-			
 			$self->close(1);
-			
 			return;
 		}
 		

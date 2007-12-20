@@ -1,350 +1,286 @@
-// Set domain at highest level
-var domainparts = document.domain.split(".");
-document.domain = domainparts[domainparts.length-2]+"."+domainparts[domainparts.length-1];
+/*
+stream: xhrinteractive, iframe, serversent
+longpoll
+smartpoll
+simplepoll
+*/
 
-Function.prototype.bind = function(obj) {
-	var method = this,
-	temp = function() {
-		return method.apply(obj, arguments);
-	};
-	return temp;
-}
-Function.prototype.andThen=function(g) {
-	var f=this;
-	var a=this.arguments
-	return function(args) {
-		f(a);g(args);
-	}
-};
+Meteor = {
 
-function Meteor(instID) {
+	callbacks: {
+		process: function() {},
+		reset: function() {},
+		eof: function() {},
+		statuschanged: function() {},
+		changemode: function() {}
+	},
+	channelcount: 0,
+	channels: {},
+	debugmode: false,
+	frameref: null,
+	host: null,
+	hostid: null,
+	maxpollfreq: 60000,
+	minpollfreq: 2000,
+	mode: "stream",
+	pingtimeout: 20000,
+	pingtimer: null,
+	pollfreq: 5000,
+	port: 80,
+	polltimeout: 30000,
+	recvtimes: [],
+	status: 0,
+	updatepollfreqtimer: null,
 
-	this.transferDoc = false;
-	this.pingtimer = false;
-	this.updatepollfreqtimer = false;
-	this.lastrequest = 0;
-	this.recvtimes = [];
-	this.MHostId = false;
-	this.callback_process = function() {};
-	this.callback_reset = function() {};
-	this.callback_eof = function() {};
-	this.callback_changemode = function() {};
-	this.callback_statuschanged = function() {};
-	this.persist = 1;
-	this.frameloadtimer = false;
-	this.debugmode = false;
-	this.subsurl = false;
-	this.channels = {};
-	this.channelcount = 0;
-	this.streamreq = false;
-	this.byteoffset = 0;
+	register: function(ifr) {
+		ifr.p = Meteor.process;
+		ifr.r = Meteor.reset;
+		ifr.eof = Meteor.eof;
+		clearTimeout(Meteor.frameloadtimer);
+		Meteor.setstatus(4);
+		Meteor.log("Frame registered");
+	},
 
-	// Documented public properties
-	this.subdomain = "data";
-	this.dynamicpageaddress = "push";
-	this.smartpoll = 1;
-	this.pollfreq = 2000;
-	this.minpollfreq = 2000;
-	this.mode = "stream";
-	this.polltimeout = 30000;
-	this.pingtimeout = 10000;
-	this.maxmessages = 0;
-	this.status = 0;
+	joinChannel: function(channelname, backtrack) {
+		if (typeof(Meteor.channels[channelname]) != "undefined") throw "Cannot join channel "+channelname+": already subscribed";
+		Meteor.channels[channelname] = {backtrack:backtrack, lastmsgreceived:0};
+		Meteor.log("Joined channel "+channelname);
+		Meteor.channelcount++;
+		if (Meteor.status != 0) Meteor.connect();
+	},
 
-	/* Statuses:	0 = Uninitialised,
-					1 = Loading stream,
-					2 = Loading controller frame,
-					3 = Controller frame timeout, retrying.
-					4 = Controller frame loaded and ready
-					5 = Receiving data
-	*/
+	leaveChannel: function(channelname) {
+		if (typeof(Meteor.channels[channelname]) == "undefined") throw "Cannot leave channel "+channelname+": not subscribed";
+		delete Meteor.channels[channelname];
+		Meteor.log("Left channel "+channelname);
+		if (Meteor.status != 0) Meteor.connect();
+		Meteor.channelcount--;
+	},
 
-	this.instID = (typeof(instID) != "undefined") ? instID : 0;
-	this.MHostId = Math.floor(Math.random()*100000000)+""+this.instID;
-}
+	connect: function() {
+		Meteor.log("Connecting");
+		if (!Meteor.host) throw "Meteor host not specified";
+		if (isNaN(Meteor.port)) throw "Meteor port not specified";
+		if (!Meteor.channelcount) throw "No channels specified";
+		if (Meteor.status) Meteor.disconnect();
+		Meteor.setstatus(1);
+		var now = new Date();
+		var t = now.getTime();
+		if (!Meteor.hostid) Meteor.hostid = t+""+Math.floor(Math.random()*1000000)
+		document.domain = Meteor.extract_xss_domain(document.domain);
+		if (Meteor.mode=="stream") Meteor.mode = Meteor.selectStreamTransport();
+		Meteor.log("Selected "+Meteor.mode+" transport");
+		if (Meteor.mode=="xhrinteractive" || Meteor.mode=="iframe" || Meteor.mode=="serversent") {
+			if (Meteor.mode == "iframe") {
+				Meteor.loadFrame(Meteor.getSubsUrl());
+			} else {
+				Meteor.loadFrame("http://"+Meteor.host+((Meteor.port==80)?"":":"+Meteor.port)+"/stream.html");
+			}
+			clearTimeout(Meteor.pingtimer);
+			Meteor.pingtimer = setTimeout(Meteor.pollmode, Meteor.pingtimeout);
 
-Meteor.instances = new Array();
-
-Meteor.create = function(instID) {
-	if (!instID) instID = Meteor.instances.length;
-	Meteor.instances[instID] = new Meteor(instID);
-	return Meteor.instances[instID];
-}
-
-Meteor.register = function(ifr) {
-	instid = new String(ifr.window.frameElement.id);
-	instid = instid.replace(/.*_([0-9]*)$/, "$1");
-	ifr.p = this.instances[instid].process.bind(this.instances[instid]);
-	ifr.r = this.instances[instid].reset.bind(this.instances[instid]);
-	ifr.eof = this.instances[instid].eof.bind(this.instances[instid]);
-	ifr.get = this.instances[instid].get.bind(this.instances[instid]);
-	ifr.increasepolldelay = this.instances[instid].increasepolldelay.bind(this.instances[instid]);
-	clearTimeout(this.instances[instid].frameloadtimer);
-	this.instances[instid].setstatus(4);
-	if (this.debugmode) console.log("Frame registered");
-}
-
-Meteor.reset = function(ifr) {
-	instid = new String(ifr.window.frameElement.id);
-	instid = instid.replace(/.*_([0-9]*)$/, "$1");
-	this.instances[instid].reset();
-}
-
-window.onunload = function() {
-	for (var i in Meteor.instances) {
-		if (Meteor.instances[i].transferDoc) delete Meteor.instances[i].transferDoc;
-	}
-}
-
-
-Meteor.prototype.joinChannel = function(channelname, backtrack) {
-	if (typeof(this.channels[channelname]) != "undefined") throw "Cannot join channel "+channelname+": already subscribed";
-	this.channels[channelname] = {backtrack:backtrack, lastmsgreceived:0};
-	if (this.debugmode) console.log("Joined channel "+channelname+", channel list follows");
-	if (this.debugmode) console.log(this.channels);
-	if (this.status != 0) this.start();
-	this.channelcount++;
-}
-
-Meteor.prototype.leaveChannel = function(channelname) {
-	if (typeof(this.channels[channelname]) == "undefined") throw "Cannot leave channel "+channelname+": not subscribed";
-	delete this.channels[channelname];
-	if (this.status != 0) this.start();
-	this.channelcount--;
-}
-
-Meteor.prototype.start = function() {
-	this.persist = (this.persist)?1:0;
-	this.smartpoll = (this.smartpoll)?1:0;
-	this.mode = (this.mode=="stream")?"stream":"poll";
-	if (!this.subdomain || !this.channelcount) throw "Channel or Meteor subdomain host not specified";
-	this.stop();
-	var now = new Date();
-	var t = now.getTime();
-	this.setstatus(1);
-	this.updateSubsUrl();
-	if (this.mode=="stream") {
-		if (document.all) {
-			this.createIframe(this.subsurl);
 		} else {
-			this.createIframe("http://"+this.subdomain+"."+location.hostname+"/stream.html");
+			Meteor.loadFrame("http://"+Meteor.host+((Meteor.port==80)?"":":"+Meteor.port)+"/poll.html");
+			Meteor.recvtimes[0] = t;
+			if (Meteor.updatepollfreqtimer) clearTimeout(Meteor.updatepollfreqtimer);
+			if (Meteor.mode=='smartpoll') Meteor.updatepollfreqtimer = setInterval(Meteor.updatepollfreq, 2500);
+			if (Meteor.mode=='longpoll') Meteor.pollfreq = Meteor.minpollfreq;
 		}
-		var f = this.pollmode.bind(this);
-		clearTimeout(this.pingtimer);
-		this.pingtimer = setTimeout(f, this.pingtimeout);
+		Meteor.lastrequest = t;
+	},
 
-	} else {
-		this.createIframe("http://"+this.subdomain+"."+location.hostname+"/poll.html?nc="+t);
-		this.recvtimes[0] = t;
-		if (this.updatepollfreqtimer) clearTimeout(this.updatepollfreqtimer);
-		this.updatepollfreqtimer = setInterval(this.updatepollfreq.bind(this), 2500);
-	}
-	this.lastrequest = t;
-}
-
-Meteor.prototype.updateSubsUrl = function() {
-
-	// If streaming or long polling, connection should persist
-	this.persist = (this.mode == "stream" || (this.mode=='poll' && this.maxmessages > 0)) ? 1 : 0;
-	var surl = "http://" + this.subdomain + "." + location.hostname + "/" + this.dynamicpageaddress + "?id=" + this.MHostId;
-	if (this.persist && this.mode != "stream") surl += "&maxmessages=" + this.maxmessages;
-	surl += "&persist="+this.persist;
-	for (var c in this.channels) {
-		surl += "&channel="+c;
-		if (this.channels[c].lastmsgreceived > 0) {
-			surl += "&restartfrom="+(this.channels[c].lastmsgreceived+1);
-		} else if (this.channels[c].backtrack > 0) {
-			surl += "&backtrack="+this.channels[c].backtrack;
-		} else if (this.channels[c].backtrack < 0 || isNaN(this.channels[c].backtrack)) {
-			surl += "&restartfrom=";
+	disconnect: function() {
+		if (Meteor.status) {
+			if (typeof(Meteor.frameref)=="iframe") Meteor.frameref.setAttribute("src", "about:blank");
+			Meteor.frameref = null;
+			clearTimeout(Meteor.pingtimer);
+			clearTimeout(Meteor.updatepollfreqtimer);
+			clearTimeout(Meteor.frameloadtimer);
+			if (typeof CollectGarbage == 'function') CollectGarbage();
+			Meteor.setstatus(0);
 		}
-	}
-	this.subsurl = surl;
-}
+	},
+	
+	selectStreamTransport: function() {
+		try {
+			var test = ActiveXObject;
+			return "iframe";
+		} catch (e) {}
+		if ((typeof window.addEventStream) == "function") return "iframe";
+		return "xhrinteractive";
+	},
 
-Meteor.prototype.createIframe = function(url) {
-	delete this.transferDoc;
-	if (document.all) try { this.transferDoc = new ActiveXObject("htmlfile") } catch(ex) { this.transferDoc = null }
-	if (document.all && this.transferDoc) {
-		this.transferDoc.open();
-		this.transferDoc.write("<html>");
-		this.transferDoc.write("<script>document.domain=\""+(document.domain)+"\";</"+"script>");
-		this.transferDoc.write("</html>");
-		this.transferDoc.parentWindow.Meteor = Meteor;
-		this.transferDoc.close();
-		var ifrDiv = this.transferDoc.createElement("div");
-		this.transferDoc.appendChild(ifrDiv);
-		ifrDiv.innerHTML = "<iframe id=\"meteorframe_"+this.instID+"\" src=\""+url+"\" style=\"display: none;\"></iframe>";
-	} else {
-		var ifr = document.createElement("IFRAME");
-		ifr.style.width = "10px";
-		ifr.style.height = "10px";
-		ifr.style.border = "none";
-		ifr.style.position = "absolute";
-		ifr.style.top = "-10px";
-		ifr.style.marginTop = "-10px";
-		ifr.style.zIndex = "-20";
-		ifr.setAttribute("id", "meteorframe_"+this.instID);
-		ifr.Meteor = Meteor;
-		if (document.compatMode=='CSS1Compat') {
-			var innerifr = document.createElement("IFRAME");
-			innerifr.setAttribute("src", url);
-			innerifr.setAttribute("id", "meteorinnerframe_"+this.instID);
-			ifr.appendChild(innerifr);
-			document.body.appendChild(ifr);
-		} else {
+	getSubsUrl: function() {
+		var surl = "http://" + Meteor.host + ((Meteor.port==80)?"":":"+Meteor.port) + "/push/" + Meteor.hostid + "/" + Meteor.mode;
+		for (var c in Meteor.channels) {
+			surl += "/"+c;
+			if (Meteor.channels[c].lastmsgreceived > 0) {
+				surl += ".r"+(Meteor.channels[c].lastmsgreceived+1);
+			} else if (Meteor.channels[c].backtrack > 0) {
+				surl += ".b"+Meteor.channels[c].backtrack;
+			} else if (Meteor.channels[c].backtrack < 0 || isNaN(Meteor.channels[c].backtrack)) {
+				surl += ".h";
+			}
+		}
+		return surl;
+	},
+
+	loadFrame: function(url) {
+		Meteor.frameref = null;
+		try {
+			var transferDoc = new ActiveXObject("htmlfile");
+			transferDoc.open();
+			transferDoc.write("<html><script>");
+			transferDoc.write("document.domain=\""+(document.domain)+"\";");
+			transferDoc.write("</"+"script></html>");
+			transferDoc.parentWindow.Meteor = Meteor;
+			transferDoc.close();
+			var ifrDiv = transferDoc.createElement("div");
+			transferDoc.appendChild(ifrDiv);
+			ifrDiv.innerHTML = "<iframe src=\""+url+"\"></iframe>";
+			Meteor.frameref = transferDoc;
+		} catch (e) {
+			var ifr = document.createElement("IFRAME");
+			ifr.style.width = "10px";
+			ifr.style.height = "10px";
+			ifr.style.border = "none";
+			ifr.style.position = "absolute";
+			ifr.style.top = "-10px";
+			ifr.style.marginTop = "-10px";
+			ifr.style.zIndex = "-20";
+			ifr.Meteor = Meteor;
 			ifr.setAttribute("src", url);
 			document.body.appendChild(ifr);
+			Meteor.frameref = ifr;
 		}
-	}
-	if (this.debugmode) console.log("Loading URL '"+url+"' into frame...");
-	var f = this.frameloadtimeout.bind(this);
-	this.frameloadtimer = setTimeout(f, 5000);
-}
+		Meteor.log("Loading URL '"+url+"' into frame...");
+		Meteor.frameloadtimer = setTimeout(Meteor.frameloadtimeout, 5000);
+	},
 
-Meteor.prototype.stop = function() {
-	if (typeof(this.transferDoc)=="object") {
-		this.transferDoc = false;
-	}
-	if (document.getElementById("meteorframe_"+this.instID)) {
-		document.getElementById("meteorframe_"+this.instID).src="about:blank";
-		document.body.removeChild(document.getElementById("meteorframe_"+this.instID));
-	}
-	clearTimeout(this.pingtimer);
-	clearTimeout(this.updatepollfreqtimer);
-	clearTimeout(this.frameloadtimer);
-	this.setstatus(0);
-}
+	pollmode: function() {
+		Meteor.log("Ping timeout");
+		Meteor.mode="smartpoll";
+		clearTimeout(Meteor.pingtimer);
+		Meteor.connect();
+		Meteor.callbacks["changemode"]("poll");
+		Meteor.lastpingtime = false;
+	},
 
-Meteor.prototype.pollmode = function() {
-	if (this.debugmode) console.log("Ping timeout");
-	this.mode="poll";
-	this.start();
-	this.callback_changemode("poll");
-	this.lastpingtime = false;
-}
+	process: function(id, channel, data) {
+		if (id == -1) {
+			Meteor.log("Ping");
+			Meteor.ping();
+		} else if (typeof(Meteor.channels[channel]) != "undefined" && id > Meteor.channels[channel].lastmsgreceived) {
+			Meteor.log("Message "+id+" received on channel "+channel+" (last id on channel: "+Meteor.channels[channel].lastmsgreceived+")\n"+data);
+			Meteor.callbacks["process"](data);
+			Meteor.channels[channel].lastmsgreceived = id;
+			if (Meteor.mode=="smartpoll") {
+				var now = new Date();
+				Meteor.recvtimes[Meteor.recvtimes.length] = now.getTime();
+				while (Meteor.recvtimes.length > 5) Meteor.recvtimes.shift();
+			}
+		}
+		Meteor.setstatus(5);
+	},
 
-Meteor.prototype.process = function(id, channel, data) {
-	if (id == -1) {
-		if (this.debugmode) console.log("Ping");
-		this.ping();
-	} else if (typeof(this.channels[channel]) != "undefined" && id > this.channels[channel].lastmsgreceived) {
-		if (this.debugmode) console.log("Message "+id+" received on channel "+channel+" (last id on channel: "+this.channels[channel].lastmsgreceived+")\n"+data);
-		this.callback_process(data);
-		this.channels[channel].lastmsgreceived = id;
-		if (this.mode=="poll") {
+	ping: function() {
+		if (Meteor.pingtimer) {
+			clearTimeout(Meteor.pingtimer);
+			Meteor.pingtimer = setTimeout(Meteor.pollmode, Meteor.pingtimeout);
 			var now = new Date();
-			var t = now.getTime();
-			this.recvtimes[this.recvtimes.length] = t;
-			while (this.recvtimes.length > 5) this.recvtimes.shift();
+			Meteor.lastpingtime = now.getTime();
 		}
-	}
-	this.updateSubsUrl();
-	this.setstatus(5);
-}
+		Meteor.setstatus(5);
+	},
 
-Meteor.prototype.ping = function() {
-	if (this.mode=="stream" && this.pingtimer) {
-		clearTimeout(this.pingtimer);
-		var f = this.pollmode.bind(this);
-		this.pingtimer = setTimeout(f, this.pingtimeout);
+	reset: function() {
+		Meteor.log("Stream reset");
+		Meteor.ping();
+		Meteor.callbacks["reset"]();
 		var now = new Date();
-		this.lastpingtime = now.getTime();
-	}
-	this.setstatus(5);
-}
+		var t = now.getTime();
+		var x = Meteor.pollfreq - (t-Meteor.lastrequest);
+		if (x < 10) x = 10;
+		setTimeout(Meteor.connect, x);
+	},
 
-Meteor.prototype.reset = function() {
-	if (this.debugmode) console.log("Stream reset");
-	var now = new Date();
-	var t = now.getTime();
-	var x = this.pollfreq - (t-this.lastrequest);
-	if (x < 10) x = 10;
-	this.ping();
-	this.callback_reset();
-	setTimeout(this.start.bind(this), x);
-}
+	eof: function() {
+		Meteor.callbacks["eof"]();
+	},
 
-Meteor.prototype.eof = function() {
-	this.callback_eof();
-}
-
-Meteor.prototype.get = function(varname) {
-	eval("var a = this."+varname+";");
-	if (typeof(a) == "undefined") throw "Cannot get value of "+varname;
-	return a;
-}
-
-Meteor.prototype.increasepolldelay = function() {
-	this.pollfreq *= 2;
-}
-
-Meteor.prototype.updatepollfreq = function() {
-	if (this.smartpoll) {
+	updatepollfreq: function() {
 		var now = new Date();
 		var t = now.getTime();
 		var avg = 0;
-		for (var i=1; i<this.recvtimes.length; i++) {
-			var x = (this.recvtimes[i]-this.recvtimes[i-1]);
-			avg += (x>60000)? 60000 : x;
+		for (var i=1; i<Meteor.recvtimes.length; i++) {
+			avg += (Meteor.recvtimes[i]-Meteor.recvtimes[i-1]);
 		}
-		x = (t-this.recvtimes[this.recvtimes.length-1]);
-		avg += (x>180000)? 180000 : x;
-		avg /= this.recvtimes.length;
-		if ((avg/3) < this.pollfreq && (avg/3) >= this.minpollfreq) this.pollfreq = Math.ceil(this.pollfreq*0.9);
-		if ((avg/3) > this.pollfreq) this.pollfreq = Math.floor(this.pollfreq*1.05);
+		avg += (t-Meteor.recvtimes[Meteor.recvtimes.length-1]);
+		avg /= Meteor.recvtimes.length;
+		var target = avg/2;
+		if (target < Meteor.pollfreq && Meteor.pollfreq > Meteor.minpollfreq) Meteor.pollfreq = Math.ceil(Meteor.pollfreq*0.9);
+		if (target > Meteor.pollfreq && Meteor.pollfreq < Meteor.maxpollfreq) Meteor.pollfreq = Math.floor(Meteor.pollfreq*1.05);
+	},
+
+	registerEventCallback: function(evt, funcRef) {
+		Function.prototype.andThen=function(g) {
+			var f=this;
+			var a=Meteor.arguments
+			return function(args) {
+				f(a);g(args);
+			}
+		};
+		if (typeof Meteor.callbacks[evt] == "function") {
+			Meteor.callbacks[evt] = (Meteor.callbacks[evt]).andThen(funcRef);
+		} else {
+			Meteor.callbacks[evt] = funcRef;
+		}
+	},
+
+	frameloadtimeout: function() {
+		Meteor.log("Frame load timeout");
+		if (Meteor.frameloadtimer) clearTimeout(Meteor.frameloadtimer);
+		Meteor.setstatus(3);
+		setTimeout(Meteor.connect, 5000);
+	},
+
+	extract_xss_domain: function(old_domain) {
+		if (old_domain.match(/^(\d{1,3}\.){3}\d{1,3}$/)) return old_domain;
+		domain_pieces = old_domain.split('.');
+		return domain_pieces.slice(-2, domain_pieces.length).join(".");
+	},
+
+	setstatus: function(newstatus) {
+		// Statuses:	0 = Uninitialised,
+		//				1 = Loading stream,
+		//				2 = Loading controller frame,
+		//				3 = Controller frame timeout, retrying.
+		//				4 = Controller frame loaded and ready
+		//				5 = Receiving data
+
+		if (Meteor.status != newstatus) {
+			Meteor.status = newstatus;
+			Meteor.callbacks["statuschanged"](newstatus);
+		}
+	},
+
+	log: function(logstr) {
+		if (Meteor.debugmode) {
+			if (window.console) {
+				window.console.log(logstr);
+			} else if (document.getElementById("meteorlogoutput")) {
+				document.getElementById("meteorlogoutput").innerHTML += logstr+"<br/>";
+			}
+		}
 	}
 }
 
-Meteor.prototype.registerEventCallback = function(evt, funcRef) {
-	if (evt=="process") {
-		this.callback_process = (this.callback_process).andThen(funcRef);
-	} else if (evt=="reset") {
-		this.callback_reset = (this.callback_reset).andThen(funcRef);
-	} else if (evt=="eof") {
-		this.callback_eof = (this.callback_eof).andThen(funcRef);
-	} else if (evt=="changemode") {
-		this.callback_changemode = (this.callback_changemode).andThen(funcRef);
-	} else if (evt=="changestatus") {
-		this.callback_statuschanged = (this.callback_statuschanged).andThen(funcRef);
+var oldonunload = window.onunload;
+if (typeof window.onunload != 'function') {
+	window.onunload = Meteor.disconnect;
+} else {
+	window.onunload = function() {
+		if (oldonunload) oldonunload();
+		Meteor.disconnect();
 	}
-}
-
-Meteor.prototype.frameloadtimeout = function() {
-	if (this.debugmode) console.log("Frame load timeout");
-	if (this.frameloadtimer) clearTimeout(this.frameloadtimer);
-	this.setstatus(3);
-	setTimeout(this.start.bind(this), 5000);
-}
-Meteor.prototype.setstatus = function(newstatus) {
-	if (this.status != newstatus) {
-		this.status = newstatus;
-		this.callback_statuschanged(newstatus);
-	}
-}
-
-
-Meteor.createCookie = function(name,value,days) {
-	if (days) {
-		var date = new Date();
-		date.setTime(date.getTime()+(days*24*60*60*1000));
-		var expires = "; expires="+date.toGMTString();
-	}
-	else var expires = "";
-	document.cookie = name+"="+value+expires+"; path=/";
-}
-
-Meteor.readCookie = function(name) {
-	var nameEQ = name + "=";
-	var ca = document.cookie.split(';');
-	for(var i=0;i < ca.length;i++) {
-		var c = ca[i];
-		while (c.charAt(0)==' ') c = c.substring(1,c.length);
-		if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
-	}
-	return null;
-}
-
-Meteor.eraseCookie = function(name) {
-	createCookie(name,"",-1);
 }
