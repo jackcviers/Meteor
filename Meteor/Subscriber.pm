@@ -89,7 +89,7 @@ sub pingPersistentConnections {
 	my $msg=$::CONF{'PingMessage'};
 	my @cons=values %PersistentConnections;
 	
-	map { $_->write($msg) } @cons;
+	map { $_->write($msg.chr(0)) } @cons;
 }
 
 sub checkPersistentConnectionsForMaxTime {
@@ -152,17 +152,15 @@ sub processLine {
 			my $channels={};
 			my $channelName;
 			my $offset;
-			foreach my $chandef (@channelData)
-			{
-				if($chandef=~/^([a-z0-9]+)(.(r|b|h)([0-9]*))?$/)
-				{
+			foreach my $chandef (@channelData) {
+				if($chandef=~/^([a-z0-9]+)(.(r|b|h)([0-9]*))?$/i) {
 					$channelName = $1;
 					$channels->{$channelName}->{'startIndex'} = undef;
-					for ($3) {
-						$offset = $4;
-						/r/ && do { $channels->{$channelName}->{'startIndex'} = $offset; last; };
-						/b/ && do { $channels->{$channelName}->{'startIndex'} = -$offset; last; };
-						/h/ && do { $channels->{$channelName}->{'startIndex'} = 0; last; };
+					if ($3) {
+					   $offset = $4;
+					   if ($3 eq 'r') { $channels->{$channelName}->{'startIndex'} = $offset; }
+					   if ($3 eq 'b') { $channels->{$channelName}->{'startIndex'} = -$offset; }
+					   if ($3 eq 'h') { $channels->{$channelName}->{'startIndex'} = 0; }
 					}
 				}
 			}
@@ -274,7 +272,7 @@ sub emitHeader {
 		}
 	/gex;
 	
-	$self->write($header);
+	$self->write($header.chr(0));
 }
 
 sub sendMessage {
@@ -284,7 +282,7 @@ sub sendMessage {
 	
 	$numMsgInThisBatch=1 unless(defined($numMsgInThisBatch));
 	
-	$self->write($msg);
+	$self->write($msg.chr(0));
 	
 	$::Statistics->{'messages_served'}+=$numMsgInThisBatch;
 	
