@@ -53,6 +53,7 @@ sub serveFileToClient {
 	unless(defined($doc))
 	{
 		$class->emitHeaderToClient($client,'404 Not Found');
+		$::Statistics->{'documents_not_found'}++;
 		
 		return undef;
 	}
