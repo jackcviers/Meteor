@@ -171,9 +171,12 @@ sub close {
 		}
 	}
 	
-	$::Statistics->{'current_controllers'}--;
-	
 	$self->SUPER::close();
+}
+
+sub didClose {
+	
+	$::Statistics->{'current_controllers'}--;
 }
 
 1;

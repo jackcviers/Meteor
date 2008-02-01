@@ -44,6 +44,7 @@ package Meteor::Subscriber;
 	
 	our %PersistentConnections=();
 	our $NumAcceptedConnections=0;
+    
 
 ###############################################################################
 # Factory methods
@@ -343,9 +344,12 @@ sub close {
 		}
 	}
 	
-	$::Statistics->{'current_subscribers'}--;
-	
 	$self->SUPER::close();
+}
+
+sub didClose {
+	
+	$::Statistics->{'current_subscribers'}--;
 }
 
 sub checkForMaxTime {

@@ -53,7 +53,8 @@ sub addAllHandleBits {
 	my $wVecRef=shift;
 	my $eVecRef=shift;
 	
-	map {$_->addHandleBits($rVecRef,$wVecRef,$eVecRef) if(defined($_)) } @Connections;
+	my @cons=@Connections;
+	map {$_->addHandleBits($rVecRef,$wVecRef,$eVecRef) if(defined($_)) } @cons;
 }
 
 sub checkAllHandleBits {
@@ -63,7 +64,8 @@ sub checkAllHandleBits {
 	my $wVec=shift;
 	my $eVec=shift;
 	
-	map {$_->checkHandleBits($rVec,$wVec,$eVec) if(defined($_)) } @Connections;
+	my @cons=@Connections;
+	map {$_->checkHandleBits($rVec,$wVec,$eVec) if(defined($_)) } @cons;
 }
 
 sub connectionCount {
@@ -295,6 +297,11 @@ sub close {
 	}
 	
 	&::syslog('debug',"Closed %s for %s",ref($self),$self->{'socket'}->{'connection'}->{'remoteIP'});
+	
+	$self->didClose();
+}
+
+sub didClose {
 }
 
 1;
