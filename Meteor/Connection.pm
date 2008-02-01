@@ -53,7 +53,7 @@ sub addAllHandleBits {
 	my $wVecRef=shift;
 	my $eVecRef=shift;
 	
-	map {$_->addHandleBits($rVecRef,$wVecRef,$eVecRef)} @Connections;
+	map {$_->addHandleBits($rVecRef,$wVecRef,$eVecRef) if(defined($_)) } @Connections;
 }
 
 sub checkAllHandleBits {
@@ -63,7 +63,7 @@ sub checkAllHandleBits {
 	my $wVec=shift;
 	my $eVec=shift;
 	
-	map {$_->checkHandleBits($rVec,$wVec,$eVec)} @Connections;
+	map {$_->checkHandleBits($rVec,$wVec,$eVec) if(defined($_)) } @Connections;
 }
 
 sub connectionCount {
