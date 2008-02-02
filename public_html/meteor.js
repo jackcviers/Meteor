@@ -160,7 +160,7 @@ Meteor = {
 
 	pollmode: function() {
 		Meteor.log("Ping timeout");
-		Meteor.mode="simplepoll";
+		Meteor.mode="smartpoll";
 		clearTimeout(Meteor.pingtimer);
 		Meteor.connect();
 		Meteor.callbacks["changemode"]("poll");
