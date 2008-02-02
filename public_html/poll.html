@@ -28,12 +28,12 @@ function poll() {
 	} catch (e) {}
 	var byteoffset = 0;
 	var newdata;
-	document.domain = topdomain;
-	var url = parent.Meteor.getSubsUrl();
+	try {
+		var url = parent.Meteor.getSubsUrl();
+	} catch(e) {
+		return false;
+	}
 	if (typeof(url)!="undefined") {
-		try {
-			document.domain = thisdomain;
-		} catch (e) {}
 		pollreq = newXmlHttp();
 		pollreq.onreadystatechange = handleresponse;
 		pollreq.open("GET", url, true);
@@ -43,7 +43,6 @@ function poll() {
 		if (parent.Meteor.polltimeout) polltimer = setTimeout(ptimeout, parent.Meteor.polltimeout);
 		pollreq.send(null);
 	}
-	document.domain=topdomain;
 }
 
 function handleresponse() {
@@ -51,8 +50,9 @@ function handleresponse() {
 		try {
 			clearTimeout(polltimer);
 		} catch (e) {}
-		if (typeof(topdomain) == "undefined") return false;
-		document.domain=topdomain;
+		try {
+			var y = parent.Meteor.getSubsUrl();
+		} catch (e) { return false };
 		newdata = pollreq.responseText;
 		while (1) {
 			var x = newdata.indexOf("<s"+"cript>p(");
@@ -68,12 +68,14 @@ function handleresponse() {
 				break;
 			}
 		}
-		var now = new Date();
-		var t = now.getTime();
-		var x = parent.Meteor.pollfreq - (t-lastrequesttime);
-		if (x < 10) x = 10;
-		pollreq = null;
-		setTimeout(poll, x);
+		if (parent.Meteor.status) {
+			var now = new Date();
+			var t = now.getTime();
+			var x = parent.Meteor.pollfreq - (t-lastrequesttime);
+			if (x < 10) x = 10;
+			pollreq = null;
+			setTimeout(poll, x);
+		}
 	}
 }
 
@@ -89,18 +91,7 @@ function ptimeout() {
 	setTimeout(poll, x);
 }
 
-function guard() {
-	var url = parent.Meteor.getSubsUrl();
-	if (typeof(url)=="undefined") {
-		pollreq.abort();
-		pollreq = null;
-		clearTimeout(polltimer);
-	}
-	setTimeout('guard()', 1000);
-}
-
 poll();
-guard();
 
 
 </script>

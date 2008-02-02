@@ -90,7 +90,7 @@ sub pingPersistentConnections {
 	my $msg=$::CONF{'PingMessage'};
 	my @cons=values %PersistentConnections;
 	
-	map { $_->write($msg.chr(0)) } @cons;
+	map { $_->write($msg) } @cons;
 }
 
 sub checkPersistentConnectionsForMaxTime {
@@ -273,7 +273,7 @@ sub emitHeader {
 		}
 	/gex;
 	
-	$self->write($header.chr(0));
+	$self->write($header);
 }
 
 sub sendMessage {
@@ -283,7 +283,7 @@ sub sendMessage {
 	
 	$numMsgInThisBatch=1 unless(defined($numMsgInThisBatch));
 	
-	$self->write($msg.chr(0));
+	$self->write($msg);
 	
 	$::Statistics->{'messages_served'}+=$numMsgInThisBatch;
 	

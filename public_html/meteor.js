@@ -25,7 +25,7 @@ Meteor = {
 	mode: "stream",
 	pingtimeout: 20000,
 	pingtimer: null,
-	pollfreq: 5000,
+	pollfreq: 3000,
 	port: 80,
 	polltimeout: 30000,
 	recvtimes: [],
@@ -91,8 +91,6 @@ Meteor = {
 
 	disconnect: function() {
 		if (Meteor.status) {
-			if (typeof(Meteor.frameref)=="iframe") Meteor.frameref.setAttribute("src", "about:blank");
-			Meteor.frameref = null;
 			clearTimeout(Meteor.pingtimer);
 			clearTimeout(Meteor.updatepollfreqtimer);
 			clearTimeout(Meteor.frameloadtimer);
@@ -126,32 +124,35 @@ Meteor = {
 	},
 
 	loadFrame: function(url) {
-		Meteor.frameref = null;
 		try {
-			var transferDoc = new ActiveXObject("htmlfile");
-			transferDoc.open();
-			transferDoc.write("<html><script>");
-			transferDoc.write("document.domain=\""+(document.domain)+"\";");
-			transferDoc.write("</"+"script></html>");
-			transferDoc.parentWindow.Meteor = Meteor;
-			transferDoc.close();
-			var ifrDiv = transferDoc.createElement("div");
-			transferDoc.appendChild(ifrDiv);
+			if (!Meteor.frameref) {
+				var transferDoc = new ActiveXObject("htmlfile");
+				Meteor.frameref = transferDoc;
+			}
+			Meteor.frameref.open();
+			Meteor.frameref.write("<html><script>");
+			Meteor.frameref.write("document.domain=\""+(document.domain)+"\";");
+			Meteor.frameref.write("</"+"script></html>");
+			Meteor.frameref.parentWindow.Meteor = Meteor;
+			Meteor.frameref.close();
+			var ifrDiv = Meteor.frameref.createElement("div");
+			Meteor.frameref.appendChild(ifrDiv);
 			ifrDiv.innerHTML = "<iframe src=\""+url+"\"></iframe>";
-			Meteor.frameref = transferDoc;
 		} catch (e) {
-			var ifr = document.createElement("IFRAME");
-			ifr.style.width = "10px";
-			ifr.style.height = "10px";
-			ifr.style.border = "none";
-			ifr.style.position = "absolute";
-			ifr.style.top = "-10px";
-			ifr.style.marginTop = "-10px";
-			ifr.style.zIndex = "-20";
-			ifr.Meteor = Meteor;
-			ifr.setAttribute("src", url);
-			document.body.appendChild(ifr);
-			Meteor.frameref = ifr;
+			if (!Meteor.frameref) {
+				var ifr = document.createElement("IFRAME");
+				ifr.style.width = "10px";
+				ifr.style.height = "10px";
+				ifr.style.border = "none";
+				ifr.style.position = "absolute";
+				ifr.style.top = "-10px";
+				ifr.style.marginTop = "-10px";
+				ifr.style.zIndex = "-20";
+				ifr.Meteor = Meteor;
+				document.body.appendChild(ifr);
+				Meteor.frameref = ifr;
+			}
+			Meteor.frameref.setAttribute("src", url);
 		}
 		Meteor.log("Loading URL '"+url+"' into frame...");
 		Meteor.frameloadtimer = setTimeout(Meteor.frameloadtimeout, 5000);
@@ -159,7 +160,7 @@ Meteor = {
 
 	pollmode: function() {
 		Meteor.log("Ping timeout");
-		Meteor.mode="smartpoll";
+		Meteor.mode="simplepoll";
 		clearTimeout(Meteor.pingtimer);
 		Meteor.connect();
 		Meteor.callbacks["changemode"]("poll");
