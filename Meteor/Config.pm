@@ -198,6 +198,19 @@ sub valueForKey {
 sub setCommandLineParameters {
 	my $class=shift;
 	
+	#
+	# Quick check if we should show the version, if so ignore everything else
+	# Accept -v, -version, and everything in between
+	# 
+	foreach my $p (@_)
+	{
+		if(index($p,'-v')==0 && index('-version',$p)==0)
+		{
+			print "$::PGM $::VERSION\n";
+			exit(0);
+		}
+	}
+	
 	while(my $cnt=scalar(@_))
 	{
 		my $k=shift(@_);
