@@ -80,7 +80,7 @@ sub deleteSubscriberWithID {
 	
 	if(exists($PersistentConnections{$id}))
 	{
-		$PersistentConnections{$id}->close(1);
+		$PersistentConnections{$id}->close();
 	}
 }
 
