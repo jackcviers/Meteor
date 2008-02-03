@@ -126,7 +126,7 @@ sub processLine {
 	{
 		# uptime
 		my $uptime=time-$::STARTUP_TIME;
-		my $txt="uptime: $uptime$::CRLF";
+		my $txt="OK$::CRLF"."uptime: $uptime$::CRLF";
 		
 		# channel_count
 		my $numChannels=Meteor::Channel->numChannels();
@@ -136,6 +136,8 @@ sub processLine {
 		{
 			$txt.=$key.': '.$::Statistics->{$key}.$::CRLF;
 		}
+		
+		$txt.="--EOT--$::CRLF";
 		
 		$self->write($txt);
 	}
