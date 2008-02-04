@@ -228,6 +228,8 @@ sub addMessage {
 	$self->trimMessageStoreBySize();
 	
 	map { $_->sendMessages($message) } @{$self->{'subscribers'}};
+	
+	$message;
 }
 
 sub messageCount {
@@ -292,7 +294,7 @@ sub indexForMessageID {
 	#
 	return undef unless(defined($id));
 	
-	my $numMessages=scalar(scalar(@{$self->{'messages'}}));
+	my $numMessages=scalar(@{$self->{'messages'}});
 	
 	return undef unless($numMessages);
 	return -1 unless($id ne '');
@@ -327,6 +329,16 @@ sub indexForMessageID {
 	return $low;
 }
 
+sub lastMsgID {
+	my $self=shift;
+	
+	my $numMessages=scalar(@{$self->{'messages'}});
+	
+	return 'undefined' unless($numMessages>0);
+	
+	@{$self->{'messages'}}[-1]->id();
+}
+
 sub descriptionWithTemplate {
 	my $self=shift;
 	my $template=shift;
@@ -344,6 +356,11 @@ sub descriptionWithTemplate {
 		{
 			$self->subscriberCount();
 		}
+		elsif($1 eq 'lastMsgID')
+		{
+			$self->lastMsgID();
+		}
+		
 		elsif(exists($self->{$1}))
 		{
 			$self->{$1};

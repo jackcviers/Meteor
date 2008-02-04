@@ -90,8 +90,9 @@ sub processLine {
 		
 		my $channelName=$1;
 		my $channel=Meteor::Channel->channelWithName($channelName);
-		$channel->addMessage($line);
-		$self->write("OK$::CRLF");
+		my $msg=$channel->addMessage($line);
+		my $msgID=$msg->id();
+		$self->write("OK\t$msgID$::CRLF");
 	}
 	elsif($cmd eq 'COUNTSUBSCRIBERS')
 	{

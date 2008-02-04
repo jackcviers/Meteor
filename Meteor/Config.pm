@@ -65,7 +65,7 @@ package Meteor::Config;
 
 'Template for each line in channelinfo',
 
-	ChannelInfoTemplate		=> '~name~ ~messageCount~\r\n',
+	ChannelInfoTemplate		=> '~name~ ~messageCount~ ~lastMsgID~\r\n',
 
 'Print out this help message',
 	Help					=> '',
