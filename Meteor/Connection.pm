@@ -111,6 +111,8 @@ sub newFromServer {
 	$self->{'writeBuffer'}='';
 	$self->{'readBuffer'}='';
 	
+	$self->{'bytesWritten'}=0;
+	
 	push(@Connections,$self);
 	
 	&::syslog('debug',"New %s for %s",ref($self),$socket->{'connection'}->{'remoteIP'});
@@ -224,6 +226,7 @@ sub checkHandleBits {
 		if(defined($bytesWritten) && $bytesWritten>0)
 		{
 			$::Statistics->{'total_outbound_bytes'}+=$bytesWritten;
+			$self->{'bytesWritten'}+=$bytesWritten;
 			$self->{'writeBuffer'}=substr($self->{'writeBuffer'},$bytesWritten);
 			if(length($self->{'writeBuffer'})==0)
 			{

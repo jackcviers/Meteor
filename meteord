@@ -35,7 +35,7 @@
 # meterod version
 ################################################################################
 	
-	$::VERSION='1.05.03';
+	$::VERSION='1.05.04';
 	$::RELEASE_DATE='not yet released';
 
 ###############################################################################
@@ -102,7 +102,9 @@
 	{
 		$0="$::PGM daemon";
 		
-		unless($::CONF{'Debug'})
+		my $facility=$::CONF{'SyslogFacility'} || $Meteor::Syslog::DEFAULT_FACILITY;
+		
+		unless($::CONF{'Debug'} || $facility eq 'none')
 		{
 			# close standard file descriptors
 			close(STDIN);
@@ -125,7 +127,7 @@
 		}
 		else
 		{
-			print "$::PGM PID: $$\n";
+			&::syslog('info',"PID\t%s",$$);
 		}
 	}
 	
@@ -179,11 +181,11 @@
 				my $rVec=$serverVector;
 				my $wVec='';
 				my $eVec='';
-		
+			
 				my $rout;
 				my $wout;
 				my $eout;
-		
+			
 				Meteor::Connection->addAllHandleBits(\$rVec,\$wVec,\$eVec);
 				
 				my $timeout=$MAIN_LOOP_TIMEOUT;

@@ -185,7 +185,7 @@ sub processLine {
 			if(scalar(keys %{$channels}))
 			{
 				$self->emitOKHeader();
-				$self->setChannels($channels,$persist);
+				$self->setChannels($channels,$persist,$self->{'mode'},'');
 				$self->close(1) unless($persist);
 				return;
 			}
@@ -215,6 +215,8 @@ sub setChannels {
 	my $self=shift;
 	my $channels=shift;
 	my $persist=shift;
+	my $mode=shift || '';
+	my $userAgent=shift || '';
 	
 	foreach my $channelName (keys %{$channels})
 	{
@@ -224,7 +226,7 @@ sub setChannels {
 		
 		$self->{'channels'}->{$channelName}=$channel if($persist);
 		
-		$channel->addSubscriber($self,$startIndex,$persist);
+		$channel->addSubscriber($self,$startIndex,$persist,$mode,$userAgent);
 	}
 }
 
@@ -337,11 +339,11 @@ sub closeChannel {
 	return unless(exists($self->{'channels'}->{$channelName}));
 	
 	my $channel=$self->{'channels'}->{$channelName};
-	$channel->removeSubscriber($self);
+	$channel->removeSubscriber($self,'channelClose');
 	
 	delete($self->{'channels'}->{$channelName});
 	
-	$self->close() if(scalar(keys %{$self->{'channels'}})==0);
+	$self->close(0,'channelsClosed') if(scalar(keys %{$self->{'channels'}})==0);
 }
 
 sub close {
@@ -351,7 +353,7 @@ sub close {
 	foreach my $channelName (keys %{$self->{'channels'}})
 	{
 		my $channel=$self->{'channels'}->{$channelName};
-		$channel->removeSubscriber($self);
+		$channel->removeSubscriber($self,'subscriberClose');
 	}
 	delete($self->{'channels'});
 	

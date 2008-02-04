@@ -169,10 +169,21 @@ sub addSubscriber {
 	my $subscriber=shift;
 	my $startId=shift;
 	my $persist=shift;
+	my $mode=shift || '';
+	my $userAgent=shift || '';
 	
 	# Note: negative $startId means go back that many messages
 	
 	push(@{$self->{'subscribers'}},$subscriber) if($persist);
+	
+	&::syslog('info','',
+		'joinchannel',
+		$subscriber->{'subscriberID'},
+		$self->{'name'},
+		$mode,
+		$startId,
+		$userAgent
+	);
 	
 	my $startIndex=$self->indexForMessageID($startId);
 	return unless(defined($startIndex));
@@ -191,6 +202,7 @@ sub addSubscriber {
 sub removeSubscriber {
 	my $self=shift;
 	my $subscriber=shift;
+	my $reason=shift ||'unknown';
 	
 	my $idx=undef;
 	for(my $i=0;$i<scalar(@{$self->{'subscribers'}});$i++)
@@ -205,6 +217,16 @@ sub removeSubscriber {
 	if(defined($idx))
 	{
 		splice(@{$self->{'subscribers'}},$idx,1);
+		
+		&::syslog('info','',
+			'leavechannel',
+			$subscriber->{'subscriberID'},
+			$self->{'name'},
+			$subscriber->{'ConnectionStart'},
+			$subscriber->{'MessageCount'},
+			$subscriber->{'bytesWritten'},
+			$reason
+		);
 	}
 	
 	$self->checkExpiration();

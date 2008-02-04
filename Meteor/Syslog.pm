@@ -48,23 +48,35 @@ package Meteor::Syslog;
 ###############################################################################
 sub ::syslog {
 	
-	if($::CONF{'Debug'})
+	my $debug=$::CONF{'Debug'};
+	
+	my $priority=shift;
+	return if($priority eq 'debug' && !$debug);
+	
+	my $format=shift;
+	my @args=@_;
+	
+	if($format eq '')
 	{
-		my $priority=shift;
-		my $format=shift;
+		my $txt=join("\t",@args);
 		
+		$format='%s';
+		@args=($txt);
+	}
+	
+	my $facility=$::CONF{'SyslogFacility'} || $Meteor::Syslog::DEFAULT_FACILITY;
+	
+	if($debug || $facility eq 'none')
+	{
 		$format=~s/\%m/$!/g;
 		
-		print STDERR "$::PGM($priority): ";
+		my $time=time;
+		
+		print STDERR "$time\t$::PGM($priority): ";
 		print STDERR sprintf($format,@_);
 		print STDERR "\n" unless(substr($format,-1) eq "\n");
 		
 		return;
-	}
-	else
-	{
-		# No expensive syslog calls for debug!
-		return if($_[0] eq 'debug');
 	}
 	
 	unless($Meteor::Syslog::_open)
@@ -74,7 +86,7 @@ sub ::syslog {
 		$Meteor::Syslog::_open=1;
 	}
 	
-	syslog(@_);
+	syslog($priority,$format,@args);
 }
 
 sub myWarn {

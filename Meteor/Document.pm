@@ -55,12 +55,26 @@ sub serveFileToClient {
 		$class->emitHeaderToClient($client,'404 Not Found');
 		$::Statistics->{'documents_not_found'}++;
 		
+		&::syslog('info','',
+			'document',
+			$relPath,
+			0,
+			404
+		);
+		
 		return undef;
 	}
 	
 	$doc->serveTo($client);
 	
 	$::Statistics->{'documents_served'}++;
+	
+	&::syslog('info','',
+		'document',
+		$relPath,
+		$doc->{'size'},
+		200
+	);
 	
 	$doc;
 }
