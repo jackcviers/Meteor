@@ -103,9 +103,13 @@ sub timestamp {
 }
 
 sub message {
-	my $self=shift;
 	
-	my $msg=$::CONF{'MessageTemplate'};
+	shift->messageWithTemplate($::CONF{'MessageTemplate'});
+}
+
+sub messageWithTemplate {
+	my $self=shift;
+	my $msg=shift;
 	
 	$msg=~s/~([^~]*)~/
 		if(!defined($1) || $1 eq '')

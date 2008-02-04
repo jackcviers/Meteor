@@ -63,6 +63,10 @@ package Meteor::Config;
 'Header template, ~server~, ~servertime~ and ~status~ will be replaced by the appropriate values.  **NOTE**: It is possible to define more than one HeaderTemplate by appending a number at the end, for example *HeaderTemplate42*. Clients can request a specific header to be used by adding the parameter template=<number> to their GET request. If *HeaderTemplate<number>* is not found, the system will use the default HeaderTemplate (no number)',
 	HeaderTemplate			=> 'HTTP/1.1 ~status~\r\nServer: ~server~\r\nContent-Type: text/html; charset=utf-8\r\nPragma: no-cache\r\nCache-Control: no-cache, no-store, must-revalidate\r\nExpires: Thu, 1 Jan 1970 00:00:00 GMT\r\n\r\n<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">\r\n<meta http-equiv="Cache-Control" content="no-store">\r\n<meta http-equiv="Cache-Control" content="no-cache">\r\n<meta http-equiv="Pragma" content="no-cache">\r\n<meta http-equiv="Expires" content="Thu, 1 Jan 1970 00:00:00 GMT">\r\n<script type="text/javascript">\r\nwindow.onError = null;\r\nvar domainparts = document.domain.split(".");\r\ndocument.domain = domainparts[domainparts.length-2]+"."+domainparts[domainparts.length-1];\r\nparent.Meteor.register(this);\r\n</script>\r\n</head>\r\n<body onload="try { parent.Meteor.reset(this) } catch (e) {}">\r\n',
 
+'Template for each line in channelinfo',
+
+	ChannelInfoTemplate		=> '~name~ ~messageCount~\r\n',
+
 'Print out this help message',
 	Help					=> '',
 
@@ -83,6 +87,10 @@ package Meteor::Config;
 
 'Interval at which PingMessage is sent to all persistent and identified subscriber connections (ie those including id=someuniqueidentifier in their request, and not specifying persist=0). Must be at least 3 if set higher than zero. Set to zero to disable.',
 	PingInterval			=> 5,
+
+'Persistence of a connection. Note: some modes have this hardcoded!',
+
+	Persist					=> 0,
 
 'Message to be sent to all persistent and identified subscriber connections (see above) every PingInterval seconds',
 	PingMessage				=> '<script>p(-1,"");</script>\r\n',
@@ -110,6 +118,7 @@ package Meteor::Config;
 	our %CommandLine=();
 	our %Defaults=();
 	our %ExtraKeys=();
+	our %Modes=();
 	
 	for(my $i=0;$i<scalar(@DEFAULTS);$i+=3)
 	{
@@ -137,51 +146,62 @@ sub updateConfig {
 	}
 	push(@keys,keys %ExtraKeys);
 	
-	foreach my $key (@keys)
-	{		
-		if(exists($CommandLine{$key}))
-		{
-			print STDERR "CmdLine" if($debug);
-			$::CONF{$key}=$CommandLine{$key};
-		}
-		elsif(exists($ConfigFileData{$key}))
-		{
-			print STDERR "CnfFile" if($debug);
-			$::CONF{$key}=$ConfigFileData{$key};
-		}
-		elsif(exists($Defaults{$key}))
-		{
-			print STDERR "Default" if($debug);
-			$::CONF{$key}=$Defaults{$key};
-		}
-		
-		print STDERR "\t$key\t$::CONF{$key}\n" if($debug);
-		
-		# Take care of escapes
-		$::CONF{$key}=~s/\\(.)/
-			if($1 eq 'r')
-			{
-				"\r";
-			}
-			elsif($1 eq 'n')
-			{
-				"\n";
-			}
-			elsif($1 eq 's')
-			{
-				' ';
-			}
-			elsif($1 eq 't')
-			{
-				"\t";
-			}
-			else
-			{
-				$1;
-			}
-		/gex;
-	}
 	
+	foreach my $mode ('',keys %Modes)
+	{
+		foreach my $baseKey (@keys)
+		{
+			my $foundValue=0;
+			my $key=$baseKey.$mode;
+			
+			if(exists($CommandLine{$key}))
+			{
+				print STDERR "CmdLine" if($debug);
+				$::CONF{$key}=$CommandLine{$key};
+				$foundValue=1;
+			}
+			elsif(exists($ConfigFileData{$key}))
+			{
+				print STDERR "CnfFile" if($debug);
+				$::CONF{$key}=$ConfigFileData{$key};
+				$foundValue=1;
+			}
+			elsif(exists($Defaults{$key}))
+			{
+				print STDERR "Default" if($debug);
+				$::CONF{$key}=$Defaults{$key};
+				$foundValue=1;
+			}
+			
+			next unless($foundValue);
+			
+			print STDERR "\t$key\t$::CONF{$key}\n" if($debug);
+			
+			# Take care of escapes
+			$::CONF{$key}=~s/\\(.)/
+				if($1 eq 'r')
+				{
+					"\r";
+				}
+				elsif($1 eq 'n')
+				{
+					"\n";
+				}
+				elsif($1 eq 's')
+				{
+					' ';
+				}
+				elsif($1 eq 't')
+				{
+					"\t";
+				}
+				else
+				{
+					$1;
+				}
+			/gex;
+		}
+	}
 	print STDERR '-'x79 ."\n" if($debug);
 }
 
@@ -217,6 +237,14 @@ sub setCommandLineParameters {
 		&usage("'$k' invalid") unless($k=~s/^\-(?=.+)//);
 		
 		$k='Debug' if($k eq 'd');
+		
+		my $mode='';
+		
+		if($k=~s/(\..+)$//)
+		{
+			$mode=$1;
+			$Modes{$mode}=1;
+		}
 		
 		my $key=undef;
 		my $kl=length($k);
@@ -262,13 +290,13 @@ sub setCommandLineParameters {
 		
 		#print "$kOrig: $key\n";
 		
-		$CommandLine{$key}=1;
+		$CommandLine{"$key$mode"}=1;
 		
 		if($cnt>1 && $_[0]!~/^\-(?!\-)/)
 		{
 			my $param=shift;
 			$param=~s/^\-\-/\-/;
-			$CommandLine{$key}=$param;
+			$CommandLine{"$key$mode"}=$param;
 		}
 	}
 	
@@ -285,6 +313,8 @@ sub readConfig {
 	my $path=$class->valueForKey('ConfigFileLocation');
 	return unless(defined($path) && -f $path);
 	
+	my $mode='';
+	
 	open(CONFIG,"$path") or &usage("Config file '$path' for read: $!\n");
 	while(<CONFIG>)
 	{
@@ -292,6 +322,12 @@ sub readConfig {
 		next if(/^\s*$/);
 		
 		s/[\r\n]*$//;
+		
+		if(/^\s*\[\s*([^\]\s]+)\s*\]\s*$/)
+		{
+			$Modes{".$1"}=1;
+			next;
+		}
 		
 		unless(/^(\S+)\s*(.*)/)
 		{
@@ -310,7 +346,7 @@ sub readConfig {
 		{
 			unless(exists($Defaults{$key}))
 			{
-				&usage("Unknown configuration file parameter name '$key'");
+				&usage("Unknown configuration file parameter name '$key$mode'");
 			}
 			if($key eq 'ConfigFileLocation')
 			{
@@ -320,7 +356,7 @@ sub readConfig {
 		
 		$val=~s/^--/-/;
 		
-		$ConfigFileData{$key}=$val;
+		$ConfigFileData{"$key$mode"}=$val;
 	}
 	close(CONFIG);
 }
@@ -340,7 +376,7 @@ EOT
 	
 		print STDERR <<"EOT";
 
-Meteor server v1.0 (release date: 1 Dec 2006)
+Meteor server v$::VERSION (release date: $::RELEASE_DATE)
 Licensed under the terms of the GNU General Public Licence (2.0)
 
 Usage:

@@ -87,10 +87,9 @@ sub deleteSubscriberWithID {
 sub pingPersistentConnections {
 	my $class=shift;
 	
-	my $msg=$::CONF{'PingMessage'};
 	my @cons=values %PersistentConnections;
 	
-	map { $_->write($msg) } @cons;
+	map { $_->ping() } @cons;
 }
 
 sub checkPersistentConnectionsForMaxTime {
@@ -138,8 +137,9 @@ sub processLine {
 		if($self->{'headerBuffer'}=~/GET\s+$::CONF{'SubscriberDynamicPageAddress'}\/([0-9a-z]+)\/([0-9a-z]+)\/(\S+)/i)
 		{
 			my $subscriberID=$1;
-			my $persist=0;
 			$self->{'mode'}=$2;
+			my $persist=$self->getConf('Persist');
+			
 			if ($self->{'mode'} eq "xhrinteractive" || $self->{'mode'} eq "iframe" || $self->{'mode'} eq "serversent" || $self->{'mode'} eq "longpoll") {
 				$persist=1;
 				$self->{'MaxMessageCount'}=1 unless(!($self->{'mode'} eq "longpoll"));
@@ -149,6 +149,13 @@ sub processLine {
 			} else {
 				$self->{'HeaderTemplateNumber'}=2;
 			}
+			
+			my $maxTime=$self->getConf('MaxTime');
+			if($maxTime>0)
+			{
+				$self->{'ConnectionTimeLimit'}=$self->{'ConnectionStart'}+$maxTime;
+			}
+			
 			my @channelData=split('/',$3);
 			my $channels={};
 			my $channelName;
@@ -246,11 +253,11 @@ sub emitHeader {
 	{
 		my $hn='HeaderTemplate'.$self->{'HeaderTemplateNumber'};
 		
-		$header=$::CONF{$hn};
+		$header=$self->getConf($hn);
 	}
-	$header=$::CONF{'HeaderTemplate'} unless(defined($header));
+	$header=$self->getConf('HeaderTemplate') unless(defined($header));
 	
-	$header=~s/~([^~]+)~/
+	$header=~s/~([^~]*)~/
 		if(!defined($1) || $1 eq '')
 		{
 			'~';
@@ -267,6 +274,10 @@ sub emitHeader {
 		{
 			time;
 		}
+		elsif($1 eq 'channelinfo')
+		{
+			Meteor::Channel->listChannelsUsingTemplate($self->getConf('ChannelInfoTemplate'));
+		}
 		else
 		{
 			'';
@@ -276,20 +287,30 @@ sub emitHeader {
 	$self->write($header);
 }
 
-sub sendMessage {
+sub sendMessages {
 	my $self=shift;
-	my $msg=shift;
-	my $numMsgInThisBatch=shift;
 	
-	$numMsgInThisBatch=1 unless(defined($numMsgInThisBatch));
+	my $numMessages=0;
+	my $msgTemplate=$self->getConf('Messagetemplate');
+	my $msgData='';
 	
-	$self->write($msg);
+	foreach my $message (@_)
+	{
+		$msgData.=$message->messageWithTemplate($msgTemplate);
+		$numMessages++;
+	}
 	
-	$::Statistics->{'messages_served'}+=$numMsgInThisBatch;
+	return if($numMessages<1);
 	
-	my $msgCount=++$self->{'MessageCount'};
+	$self->write($msgData);
 	
-	my $maxMsg=$::CONF{'MaxMessages'};
+	$::Statistics->{'messages_served'}+=$numMessages;
+	
+	my $msgCount=$self->{'MessageCount'};
+	$msgCount+=$numMessages;
+	$self->{'MessageCount'}=$msgCount;
+	
+	my $maxMsg=$self->getConf('MaxMessages');
 	if(defined($maxMsg) && $maxMsg>0 && $msgCount>=$maxMsg)
 	{
 		$self->close(1);
@@ -299,6 +320,14 @@ sub sendMessage {
 	{
 		$self->close(1);
 	}
+	
+}
+
+sub ping {
+	my $self=shift;
+	my $msg=$self->getConf('PingMessage');
+	
+	$self->write($msg);
 }
 
 sub closeChannel {
@@ -337,7 +366,7 @@ sub close {
 	#
 	unless($noShutdownMsg || $self->{'remoteClosed'} || exists($self->{'headerBuffer'}))
 	{
-		my $msg=$::CONF{'SubscriberShutdownMsg'};
+		my $msg=$self->getConf('SubscriberShutdownMsg');
 		if(defined($msg) && $msg ne '')
 		{
 			$self->write($msg);
@@ -357,6 +386,20 @@ sub checkForMaxTime {
 	my $time=shift;
 	
 	$self->close(1) if(exists($self->{'ConnectionTimeLimit'}) && $self->{'ConnectionTimeLimit'}<$time);
+}
+
+sub getConf {
+	my $self=shift;
+	my $key=shift;
+	
+	if(exists($self->{'mode'}) && $self->{'mode'} ne '')
+	{
+		my $k=$key.'.'.$self->{'mode'};
+		
+		return $::CONF{$k} if(exists($::CONF{$k}));
+	}
+	
+	$::CONF{$key};
 }
 
 1;

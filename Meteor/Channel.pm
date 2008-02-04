@@ -77,6 +77,23 @@ sub listChannels {
 	$list;
 }
 
+sub listChannelsUsingTemplate {
+	my $class=shift;
+	my $template=shift;
+	
+	return '' unless(defined($template) && $template ne '');
+	
+	my $list='';
+	foreach my $channelName (sort keys %Channels)
+	{
+		my $channel=$Channels{$channelName};
+		
+		$list.=$channel->descriptionWithTemplate($template);
+	}
+	
+	$list;
+}
+
 sub deleteChannel {
 	my $class=shift;
 	my $channelName=shift;
@@ -165,16 +182,10 @@ sub addSubscriber {
 	
 	$startIndex=0 if($startIndex<0);
 	
-	my $numMsgToSend=0;
-	while($startIndex<$msgCount)
+	if($startIndex<$msgCount)
 	{
-		my $message=$self->{'messages'}->[$startIndex++];
-		
-		$txt.=$message->message();
-		$numMsgToSend++;
+		$subscriber->sendMessages(@{$self->{'messages'}}[$startIndex,$msgCount-1]);
 	}
-	
-	$subscriber->sendMessage($txt,$numMsgToSend);
 }
 
 sub removeSubscriber {
@@ -216,8 +227,7 @@ sub addMessage {
 	
 	$self->trimMessageStoreBySize();
 	
-	my $text=$message->message();
-	map { $_->sendMessage($text) } @{$self->{'subscribers'}};
+	map { $_->sendMessages($message) } @{$self->{'subscribers'}};
 }
 
 sub messageCount {
@@ -315,6 +325,36 @@ sub indexForMessageID {
 	return undef if($low>=$numMessages);
 	
 	return $low;
+}
+
+sub descriptionWithTemplate {
+	my $self=shift;
+	my $template=shift;
+	
+	$template=~s/~([a-zA-Z0-9_]*)~/
+		if(!defined($1) || $1 eq '')
+		{
+			'~';
+		}
+		elsif($1 eq 'messageCount')
+		{
+			$self->messageCount();
+		}
+		elsif($1 eq 'subscriberCount')
+		{
+			$self->subscriberCount();
+		}
+		elsif(exists($self->{$1}))
+		{
+			$self->{$1};
+		}
+		else
+		{
+			'';
+		}
+	/gex;
+	
+	$template;
 }
 
 1;
