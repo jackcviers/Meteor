@@ -45,6 +45,7 @@ package Meteor::Socket;
 		
 		# Cache getprotobyname result as on some systems it is slow.
 		$Meteor::Socket::TCP_PROTO_NAME=getprotobyname('tcp');
+		$Meteor::Socket::UDP_PROTO_NAME=getprotobyname('udp');
 	}
 
 ###############################################################################
@@ -115,6 +116,45 @@ sub newServer {
 		|| die("$class bind: $!");
 	listen($self->{'handle'},$queueSize)
 		|| die("$class listen: $!");
+		
+	select((select($self->{'handle'}),$|=1)[0]);
+	
+	my $vec='';
+	vec($vec,CORE::fileno($self->{'handle'}),1)=1;
+	$self->{'handleVec'}=$vec;
+	
+	return $self;
+}
+
+sub newUDPServer {
+	my($class,$port,$srcIP)=@_;
+	
+	($port) || die("$class: port undefined!");
+	
+	my $self=$class->new;
+	
+	my $localAdr=INADDR_ANY;
+	$localAdr=inet_aton($srcIP) if(defined($srcIP) && $srcIP ne '');
+	
+	my $local;
+	my $sockType=PF_INET;
+	my $proto=$Meteor::Socket::UDP_PROTO_NAME;
+	
+	$self->{'port'}=$port;
+	($local=sockaddr_in($port,$localAdr))
+		|| die("$class: sockaddr_in for port '$port' failed");
+	
+	$self->{'handle'}=$self->nextHandle();
+	$self->{'socketType'}=$sockType;
+	
+	socket($self->{'handle'},$sockType,SOCK_DGRAM,$proto)
+		|| die("$class socket: $!");
+	
+	setsockopt($self->{'handle'},SOL_SOCKET,SO_REUSEADDR,pack("l", 1))
+		|| die("setsockopt: $!");
+	
+	bind($self->{'handle'},$local)
+		|| die("$class bind: $!");
 		
 	select((select($self->{'handle'}),$|=1)[0]);
 	

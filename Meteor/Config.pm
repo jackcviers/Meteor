@@ -112,6 +112,13 @@ package Meteor::Config;
 
 'The syslog facility to use',
 	SyslogFacility			=> 'daemon',
+	
+'IP address for udp server (leave empty for all local addresses)',
+	UDPIP					=> '',
+	
+'Port number for udp connections, set to 0 to disable',
+	UDPPort					=> 0,
+
 	);
 	
 	our %ConfigFileData=();

@@ -35,7 +35,7 @@
 # meterod version
 ################################################################################
 	
-	$::VERSION='1.05.04';
+	$::VERSION='1.05.05';
 	$::RELEASE_DATE='not yet released';
 
 ###############################################################################
@@ -43,6 +43,8 @@
 ###############################################################################
 	
 	use strict;
+	
+	use Socket;
 	
 	use Meteor::Syslog;
 	
@@ -63,6 +65,8 @@
 	our $AGE_CHECK_INTERVALL=60;
 	
 	our $MAX_EXIT_DELAY=120;
+	
+	our $UDP_MAX_MESSAGE_SIZE=8192;
 
 ###############################################################################
 # Main
@@ -160,9 +164,22 @@
 	);
 	my $subscriberServerFN=$subscriberServer->fileno();
 	
+	my $udpServer=undef;
+	my $udpPort=$::CONF{'UDPPort'};
+	my $udpServerFN=undef;
+	if($udpPort && $udpPort>0)
+	{
+		$udpServer=Meteor::Socket->newUDPServer(
+			$udpPort,
+			$::CONF{'UDPIP'}
+		);
+		$udpServerFN=$udpServer->fileno();
+	}
+	
 	my $serverVector='';
 	vec($serverVector,$controlServerFN,1)=1;
 	vec($serverVector,$subscriberServerFN,1)=1;
+	vec($serverVector,$udpServerFN,1)=1 if(defined($udpServerFN));
 	
 	my $lastAgeCheck=time;
 	
@@ -209,6 +226,10 @@
 					if(vec($rout,$subscriberServerFN,1))
 					{
 						Meteor::Subscriber->newFromServer($subscriberServer);
+					}
+					if(defined($udpServerFN) && vec($rout,$udpServerFN,1))
+					{
+						&handleUPD($udpServer);
 					}
 					
 					Meteor::Connection->checkAllHandleBits($rout,$wout,$eout);
@@ -329,6 +350,33 @@
 	}
 	
 	&::syslog('emerg',"$::PGM loop exited");
+
+###############################################################################
+# Subroutines
+###############################################################################
+sub handleUPD {
+	$udpServer=shift;
+	
+	my $line;
+	my $hispaddr=recv($udpServer->{'handle'},$line,$::UDP_MAX_MESSAGE_SIZE,0);
+	
+	&::syslog('debug',"udp message received: %s",$line);
+	
+	return unless($line=~s/^(\S+)\s//);
+	
+	my $cmd=$1;
+	
+	if($cmd eq 'ADDMESSAGE')
+	{
+		return unless($line=~s/^(\S+)\s//);
+		
+		my $channelName=$1;
+		my $channel=Meteor::Channel->channelWithName($channelName);
+		my $msg=$channel->addMessage($line);
+		my $msgID=$msg->id();
+		&::syslog('debug',"udp: new message added, ID %s",$msgID);
+	}
+}
 
 1;
 ############################################################################EOF

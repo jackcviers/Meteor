@@ -1,0 +1,85 @@
+#!/usr/bin/perl -w
+###############################################################################
+#   Meteor
+#   An HTTP server for the 2.0 web
+#   Copyright (c) 2006 contributing authors
+#
+#   meteor broadcast
+#
+#	A very simple program to broadcast one or more strings to meteor servers.
+# 	Call as:
+# 	
+# 		meteorBroadcast <port> 'A string' ...
+# 	
+# 	See meteor documentation how to enable UDP support and what strings
+# 	are accepted.
+#
+###############################################################################
+#
+#   This program is free software; you can redistribute it and/or modify it
+#   under the terms of the GNU General Public License as published by the Free
+#   Software Foundation; either version 2 of the License, or (at your option)
+#   any later version.
+#
+#   This program is distributed in the hope that it will be useful, but WITHOUT
+#   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+#   FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+#   more details.
+#
+#   You should have received a copy of the GNU General Public License along
+#   with this program; if not, write to the Free Software Foundation, Inc.,
+#   59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+#
+#   For more information visit www.meteorserver.org
+#
+###############################################################################
+
+###############################################################################
+# meterod version
+################################################################################
+	
+	$::VERSION='0.01.00';
+	
+	our $DEBUG=1;
+
+###############################################################################
+# Configuration
+###############################################################################
+	
+	use strict;
+	use Socket;
+
+###############################################################################
+# Main
+###############################################################################
+	
+	unless(scalar(@ARGV>=2) && $ARGV[0]=~/^\d+$/)
+	{
+		die("Usage:\n\n\t$0 <port> <string> ...\n\n");
+	}
+	
+	my $port=shift;
+	
+	# Open udp broadcast
+	socket(UDP,PF_INET,SOCK_DGRAM,getprotobyname('udp'))
+		|| die("socket: $!");
+	setsockopt(UDP,SOL_SOCKET,SO_BROADCAST,1);
+	select((select(UDP),$|=1)[0]);
+	our $UDP_BC=sockaddr_in($port,INADDR_BROADCAST);
+	
+	# if(defined($LOCAL_IP))
+	# {
+	# 	my $local=sockaddr_in(0,inet_aton($LOCAL_IP))
+	# 				|| die("$class: local host '$LOCAL_IP' invalid");
+	# 			
+	# 	bind(UDP,$local) || die("$class bind: $!");
+	# }
+	
+	foreach my $data (@ARGV)
+	{
+		send(UDP,$data,0,$UDP_BC) or die("send: $!");
+		print "Sent ",length($data)," bytes\n" if($DEBUG);
+	}
+
+1;
+############################################################################EOF
