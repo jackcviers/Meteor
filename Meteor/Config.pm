@@ -124,7 +124,6 @@ package Meteor::Config;
 	our %ConfigFileData=();
 	our %CommandLine=();
 	our %Defaults=();
-	our %ExtraKeys=();
 	our %Modes=();
 	
 	for(my $i=0;$i<scalar(@DEFAULTS);$i+=3)
@@ -151,8 +150,6 @@ sub updateConfig {
 		next if($DEFAULTS[$i+1] eq 'Help');
 		push(@keys,$DEFAULTS[$i+1]);
 	}
-	push(@keys,keys %ExtraKeys);
-	
 	
 	foreach my $mode ('',keys %Modes)
 	{
@@ -284,12 +281,6 @@ sub setCommandLineParameters {
 				$key=$p;
 			}
 		}
-		
-		if($k=~/^HeaderTemplate(\d+)$/i)
-		{
-			$key="HeaderTemplate$1";
-			$ExtraKeys{$key}=1;
-		}
 			
 		&usage("Unknown parameter name '$kOrig'") unless(defined($key));
 		
@@ -345,20 +336,13 @@ sub readConfig {
 		my $val=$2;
 		$val='' unless(defined($val));
 		
-		if($key=~/^HeaderTemplate\d+$/)
+		unless(exists($Defaults{$key}))
 		{
-			$ExtraKeys{$key}=1;
+			&usage("Unknown configuration file parameter name '$key$mode'");
 		}
-		else
+		if($key eq 'ConfigFileLocation')
 		{
-			unless(exists($Defaults{$key}))
-			{
-				&usage("Unknown configuration file parameter name '$key$mode'");
-			}
-			if($key eq 'ConfigFileLocation')
-			{
-				&usage("'ConfigFileLocation' parameter not allowed in configuration file!");
-			}
+			&usage("'ConfigFileLocation' parameter not allowed in configuration file!");
 		}
 		
 		$val=~s/^--/-/;

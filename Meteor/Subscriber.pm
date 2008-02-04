@@ -140,16 +140,6 @@ sub processLine {
 			$self->{'mode'}=$2;
 			my $persist=$self->getConf('Persist');
 			
-			if ($self->{'mode'} eq "xhrinteractive" || $self->{'mode'} eq "iframe" || $self->{'mode'} eq "serversent" || $self->{'mode'} eq "longpoll") {
-				$persist=1;
-				$self->{'MaxMessageCount'}=1 unless(!($self->{'mode'} eq "longpoll"));
-			}
-			if ($self->{'mode'} eq "iframe") {
-				$self->{'HeaderTemplateNumber'}=1;
-			} else {
-				$self->{'HeaderTemplateNumber'}=2;
-			}
-			
 			my $maxTime=$self->getConf('MaxTime');
 			if($maxTime>0)
 			{
@@ -250,14 +240,7 @@ sub emitHeader {
 	my $self=shift;
 	my $status=shift;
 	
-	my $header=undef;
-	if(exists($self->{'HeaderTemplateNumber'}))
-	{
-		my $hn='HeaderTemplate'.$self->{'HeaderTemplateNumber'};
-		
-		$header=$self->getConf($hn);
-	}
-	$header=$self->getConf('HeaderTemplate') unless(defined($header));
+	my $header=$self->getConf('HeaderTemplate');
 	
 	$header=~s/~([^~]*)~/
 		if(!defined($1) || $1 eq '')
