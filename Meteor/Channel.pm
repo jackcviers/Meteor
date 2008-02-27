@@ -173,6 +173,8 @@ sub addSubscriber {
 	my $userAgent=shift || '';
 	
 	# Note: negative $startId means go back that many messages
+	my $startIndex=$self->indexForMessageID($startId);
+	my $logStartIndex = $startIndex || $self->lastMsgID() || 0;
 	
 	push(@{$self->{'subscribers'}},$subscriber) if($persist);
 	
@@ -181,11 +183,10 @@ sub addSubscriber {
 		$subscriber->{'subscriberID'},
 		$self->{'name'},
 		$mode,
-		$startId,
+		$logStartIndex,
 		$userAgent
 	);
 	
-	my $startIndex=$self->indexForMessageID($startId);
 	return unless(defined($startIndex));
 	
 	my $msgCount=scalar(@{$self->{'messages'}});
@@ -193,9 +194,8 @@ sub addSubscriber {
 	
 	$startIndex=0 if($startIndex<0);
 	
-	if($startIndex<$msgCount)
-	{
-		$subscriber->sendMessages(@{$self->{'messages'}}[$startIndex,$msgCount-1]);
+	if($startIndex<$msgCount) {
+		$subscriber->sendMessages(@{$self->{'messages'}}[$startIndex..$msgCount-1]);
 	}
 }
 
@@ -205,7 +205,8 @@ sub removeSubscriber {
 	my $reason=shift ||'unknown';
 	
 	my $idx=undef;
-	for(my $i=0;$i<scalar(@{$self->{'subscribers'}});$i++)
+	my $numsubs = scalar(@{$self->{'subscribers'}});
+	for(my $i=0;$i<$numsubs;$i++)
 	{
 		if($self->{'subscribers'}->[$i]==$subscriber)
 		{
@@ -218,11 +219,12 @@ sub removeSubscriber {
 	{
 		splice(@{$self->{'subscribers'}},$idx,1);
 		
+		my $timeConnected = time - $subscriber->{'ConnectionStart'};
 		&::syslog('info','',
 			'leavechannel',
 			$subscriber->{'subscriberID'},
 			$self->{'name'},
-			$subscriber->{'ConnectionStart'},
+			$timeConnected,
 			$subscriber->{'MessageCount'},
 			$subscriber->{'bytesWritten'},
 			$reason
@@ -246,6 +248,7 @@ sub addMessage {
 	$message->setText($messageText);
 	$message->setChannelName($self->{'name'});
 	push(@{$self->{'messages'}},$message);
+	&::syslog('debug',"New message ".$message->{"id"}." on channel ".$self->{'name'});
 	
 	$self->trimMessageStoreBySize();
 	
@@ -353,11 +356,8 @@ sub indexForMessageID {
 
 sub lastMsgID {
 	my $self=shift;
-	
 	my $numMessages=scalar(@{$self->{'messages'}});
-	
-	return 'undefined' unless($numMessages>0);
-	
+	return undef unless($numMessages>0);
 	@{$self->{'messages'}}[-1]->id();
 }
 
@@ -366,29 +366,17 @@ sub descriptionWithTemplate {
 	my $template=shift;
 	
 	$template=~s/~([a-zA-Z0-9_]*)~/
-		if(!defined($1) || $1 eq '')
-		{
+		if(!defined($1) || $1 eq '') {
 			'~';
-		}
-		elsif($1 eq 'messageCount')
-		{
+		} elsif($1 eq 'messageCount') {
 			$self->messageCount();
-		}
-		elsif($1 eq 'subscriberCount')
-		{
+		} elsif($1 eq 'subscriberCount') {
 			$self->subscriberCount();
-		}
-		elsif($1 eq 'lastMsgID')
-		{
+		} elsif($1 eq 'lastMsgID') {
 			$self->lastMsgID();
-		}
-		
-		elsif(exists($self->{$1}))
-		{
-			$self->{$1};
-		}
-		else
-		{
+		} elsif($1 eq 'name') {
+			$self->{'name'};
+		} else {
 			'';
 		}
 	/gex;

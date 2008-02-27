@@ -59,7 +59,6 @@ sub ::syslog {
 	if($format eq '')
 	{
 		my $txt=join("\t",@args);
-		
 		$format='%s';
 		@args=($txt);
 	}
@@ -70,10 +69,10 @@ sub ::syslog {
 	{
 		$format=~s/\%m/$!/g;
 		
-		my $time=time;
+		my $time = ($::CONF{'LogTimeFormat'} eq 'unix') ? time : localtime(time);
 		
-		print STDERR "$time\t$::PGM($priority): ";
-		print STDERR sprintf($format,@_);
+		print STDERR "$time\t$priority\t";
+		print STDERR sprintf($format,@args);
 		print STDERR "\n" unless(substr($format,-1) eq "\n");
 		
 		return;

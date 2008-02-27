@@ -80,7 +80,7 @@ sub deleteSubscriberWithID {
 	
 	if(exists($PersistentConnections{$id}))
 	{
-		$PersistentConnections{$id}->close();
+		$PersistentConnections{$id}->close(0,'newSubscriberWithSameID');
 	}
 }
 
@@ -136,15 +136,11 @@ sub processLine {
 		#
 		if($self->{'headerBuffer'}=~/GET\s+$::CONF{'SubscriberDynamicPageAddress'}\/([0-9a-z]+)\/([0-9a-z]+)\/(\S+)/i)
 		{
-			my $subscriberID=$1;
+			$self->{'subscriberID'}=$1;
 			$self->{'mode'}=$2;
 			my $persist=$self->getConf('Persist');
-			
 			my $maxTime=$self->getConf('MaxTime');
-			if($maxTime>0)
-			{
-				$self->{'ConnectionTimeLimit'}=$self->{'ConnectionStart'}+$maxTime;
-			}
+			$self->{'ConnectionTimeLimit'} = ($self->{'ConnectionStart'}+$maxTime) if ($maxTime>0);
 			
 			my @channelData=split('/',$3);
 			my $channels={};
@@ -162,21 +158,20 @@ sub processLine {
 					}
 				}
 			}
+			my $useragent = ($self->{'headerBuffer'}=~/User-Agent: (.+)/i) ? $1 : "-";
 			
 			delete($self->{'headerBuffer'});
 			
-			if($persist)
-			{
-				$self->{'subscriberID'}=$subscriberID;
-				$self->deleteSubscriberWithID($subscriberID);
-				$PersistentConnections{$subscriberID}=$self;
+			if ($persist) {
+				$self->deleteSubscriberWithID($self->{'subscriberID'});
+				$PersistentConnections{$self->{'subscriberID'}}=$self;
 			}
 			
 			if(scalar(keys %{$channels}))
 			{
 				$self->emitOKHeader();
-				$self->setChannels($channels,$persist,$self->{'mode'},'');
-				$self->close(1) unless($persist);
+				$self->setChannels($channels,$persist,$self->{'mode'},$useragent);
+				$self->close(1, 'responseComplete') unless($persist);
 				return;
 			}
 		}
@@ -184,13 +179,13 @@ sub processLine {
 		{
 			$self->deleteSubscriberWithID($1);
 			$self->emitOKHeader();
-			$self->close(1);
+			$self->close(1, 'disconnectRequested');
 			return;
 		}
 		elsif($self->{'headerBuffer'}=~/GET\s+([^\s\?]+)/)
 		{
 			Meteor::Document->serveFileToClient($1,$self);
-			$self->close(1);
+			$self->close(1, 'responseComplete');
 			return;
 		}
 		
@@ -233,7 +228,7 @@ sub emitErrorHeader {
 	$::Statistics->{'errors_served'}++;
 	
 	# close up shop here!
-	$self->close();
+	$self->close(0, 'error');
 }
 
 sub emitHeader {
@@ -276,7 +271,7 @@ sub sendMessages {
 	my $self=shift;
 	
 	my $numMessages=0;
-	my $msgTemplate=$self->getConf('Messagetemplate');
+	my $msgTemplate=$self->getConf('MessageTemplate');
 	my $msgData='';
 	
 	foreach my $message (@_)
@@ -298,12 +293,12 @@ sub sendMessages {
 	my $maxMsg=$self->getConf('MaxMessages');
 	if(defined($maxMsg) && $maxMsg>0 && $msgCount>=$maxMsg)
 	{
-		$self->close(1);
+		$self->close(1, 'maxMessageCountReached');
 	}
 	
 	if($self->{'MaxMessageCount'}>0 && $msgCount>=$self->{'MaxMessageCount'})
 	{
-		$self->close(1);
+		$self->close(1, 'maxMessageCountReached');
 	}
 	
 }
@@ -326,29 +321,31 @@ sub closeChannel {
 	
 	delete($self->{'channels'}->{$channelName});
 	
-	$self->close(0,'channelsClosed') if(scalar(keys %{$self->{'channels'}})==0);
+	$self->close(0,'channelClose') if(scalar(keys %{$self->{'channels'}})==0);
 }
 
 sub close {
 	my $self=shift;
 	my $noShutdownMsg=shift;
+	my $reason=shift;
 	
 	foreach my $channelName (keys %{$self->{'channels'}})
 	{
 		my $channel=$self->{'channels'}->{$channelName};
-		$channel->removeSubscriber($self,'subscriberClose');
+		$channel->removeSubscriber($self,$reason);
 	}
 	delete($self->{'channels'});
 	
-	if(exists($self->{'subscriberID'}))
-	{
+	# If this connection is in the PersistentConnections array, delete it, then anonymise 
+	# it so that if we have to wait for the write buffer to empty before close, it's only
+	# removed once.
+	if(exists($self->{'subscriberID'})) {
 		delete($PersistentConnections{$self->{'subscriberID'}});
+		delete($self->{'subscriberID'});
 	}
 	
-	#
 	# Send shutdown message unless remote closed or
 	# connection not yet established
-	#
 	unless($noShutdownMsg || $self->{'remoteClosed'} || exists($self->{'headerBuffer'}))
 	{
 		my $msg=$self->getConf('SubscriberShutdownMsg');
@@ -370,7 +367,7 @@ sub checkForMaxTime {
 	my $self=shift;
 	my $time=shift;
 	
-	$self->close(1) if(exists($self->{'ConnectionTimeLimit'}) && $self->{'ConnectionTimeLimit'}<$time);
+	$self->close(1,'maxTime') if(exists($self->{'ConnectionTimeLimit'}) && $self->{'ConnectionTimeLimit'}<$time);
 }
 
 sub getConf {
@@ -379,9 +376,11 @@ sub getConf {
 	
 	if(exists($self->{'mode'}) && $self->{'mode'} ne '')
 	{
-		my $k=$key.'.'.$self->{'mode'};
+		my $k=$key.$self->{'mode'};
 		
-		return $::CONF{$k} if(exists($::CONF{$k}));
+		if(exists($::CONF{$k})) {
+			return $::CONF{$k};
+		}
 	}
 	
 	$::CONF{$key};

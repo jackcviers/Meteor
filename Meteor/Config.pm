@@ -42,6 +42,9 @@ package Meteor::Config;
 	use strict;
 	
 	our @DEFAULTS=(
+'Template for each line in channelinfo',
+	ChannelInfoTemplate		=> '<script>ch("~name~", ~lastMsgID~);</script>\r\n',
+
 'Configuration file location on disk (if any)',
 	ConfigFileLocation		=> '/etc/meteord.conf',
 
@@ -61,14 +64,13 @@ package Meteor::Config;
 	DirectoryIndex	=> 'index.html',
 
 'Header template, ~server~, ~servertime~ and ~status~ will be replaced by the appropriate values.  **NOTE**: It is possible to define more than one HeaderTemplate by appending a number at the end, for example *HeaderTemplate42*. Clients can request a specific header to be used by adding the parameter template=<number> to their GET request. If *HeaderTemplate<number>* is not found, the system will use the default HeaderTemplate (no number)',
-	HeaderTemplate			=> 'HTTP/1.1 ~status~\r\nServer: ~server~\r\nContent-Type: text/html; charset=utf-8\r\nPragma: no-cache\r\nCache-Control: no-cache, no-store, must-revalidate\r\nExpires: Thu, 1 Jan 1970 00:00:00 GMT\r\n\r\n<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">\r\n<meta http-equiv="Cache-Control" content="no-store">\r\n<meta http-equiv="Cache-Control" content="no-cache">\r\n<meta http-equiv="Pragma" content="no-cache">\r\n<meta http-equiv="Expires" content="Thu, 1 Jan 1970 00:00:00 GMT">\r\n<script type="text/javascript">\r\nwindow.onError = null;\r\nvar domainparts = document.domain.split(".");\r\ndocument.domain = domainparts[domainparts.length-2]+"."+domainparts[domainparts.length-1];\r\nparent.Meteor.register(this);\r\n</script>\r\n</head>\r\n<body onload="try { parent.Meteor.reset(this) } catch (e) {}">\r\n',
-
-'Template for each line in channelinfo',
-
-	ChannelInfoTemplate		=> '~name~ ~messageCount~ ~lastMsgID~\r\n',
+	HeaderTemplate			=> 'HeaderTemplate HTTP/1.1 ~status~\r\nServer: ~server~\r\nContent-Type: text/html; charset=utf-8\r\nPragma: no-cache\r\nCache-Control: no-cache, no-store, must-revalidate\r\nExpires: Thu, 1 Jan 1970 00:00:00 GMT\r\n\r\n',
 
 'Print out this help message',
 	Help					=> '',
+
+'Format to use for timestamps in syslog: unix or human',
+	LogTimeFormat			=> 'human',
 
 'Maximum age of a message in seconds',
 	MaxMessageAge			=> 7200,
@@ -85,11 +87,10 @@ package Meteor::Config;
 'Message template, ~text~, ~id~, ~channel~ and ~timestamp~ will be replaced by the appropriate values',
 	MessageTemplate			=> '<script>p(~id~,"~channel~","~text~");</script>\r\n',
 
-'Interval at which PingMessage is sent to all persistent and identified subscriber connections (ie those including id=someuniqueidentifier in their request, and not specifying persist=0). Must be at least 3 if set higher than zero. Set to zero to disable.',
+'Interval at which PingMessage is sent to all persistent subscriber connections. Must be at least 3 if set higher than zero. Set to zero to disable.',
 	PingInterval			=> 5,
 
-'Persistence of a connection. Note: some modes have this hardcoded!',
-
+'Persistence of a connection.',
 	Persist					=> 0,
 
 'Message to be sent to all persistent and identified subscriber connections (see above) every PingInterval seconds',
@@ -107,7 +108,7 @@ package Meteor::Config;
 'An absolute filesystem path, to be used as the document root for Meteor\'s static file web server. If left empty, no documents will be served.',
 	SubscriberDocumentRoot	=> '/usr/local/meteor/public_html',
 
-'Since Meteor is capable of serving static pages from a document root as well as streaming events to subscribers, this paramter is used to specify the URI at which the event server can be reached. If set to the root, Meteor will lose the ability to serve static pages.',
+'Since Meteor is capable of serving static pages from a document root as well as streaming events to subscribers, this parameter is used to specify the URI at which the event server can be reached. If set to the root, Meteor will lose the ability to serve static pages.',
 	SubscriberDynamicPageAddress	=> '/push',
 
 'The syslog facility to use',
@@ -141,7 +142,7 @@ sub updateConfig {
 	
 	my $debug=$class->valueForKey('Debug');
 	
-	print STDERR '-'x79 ."\nParamters:\nSource \tName and Value\n".'-'x79 ."\n" if($debug);
+	print STDERR '-'x79 ."\nMeteor server v$::VERSION (release date: $::RELEASE_DATE)\r\nLicensed under the terms of the GNU General Public Licence (2.0)\n".'-'x79 ."\n" if($debug);
 	
 	my @keys=();
 	
@@ -153,6 +154,7 @@ sub updateConfig {
 	
 	foreach my $mode ('',keys %Modes)
 	{
+		print STDERR ($mode) ? "\r\n$mode:\r\n" : "\r\nDefaults:\r\n" if($debug);
 		foreach my $baseKey (@keys)
 		{
 			my $foundValue=0;
@@ -179,28 +181,21 @@ sub updateConfig {
 			
 			next unless($foundValue);
 			
-			print STDERR "\t$key\t$::CONF{$key}\n" if($debug);
+			print STDERR "\t$baseKey\t$::CONF{$key}\n" if($debug);
 			
 			# Take care of escapes
 			$::CONF{$key}=~s/\\(.)/
-				if($1 eq 'r')
-				{
+				if($1 eq 'r') {
 					"\r";
-				}
-				elsif($1 eq 'n')
-				{
+				} elsif($1 eq 'n') {
 					"\n";
-				}
-				elsif($1 eq 's')
-				{
+				} elsif($1 eq 's') {
 					' ';
-				}
-				elsif($1 eq 't')
-				{
+				} elsif($1 eq 't') {
 					"\t";
-				}
-				else
-				{
+				} elsif($1 eq '0') {
+					"\0";
+				} else {
 					$1;
 				}
 			/gex;
@@ -244,9 +239,9 @@ sub setCommandLineParameters {
 		
 		my $mode='';
 		
-		if($k=~s/(\..+)$//)
+		if($k=~s/(\.(.+))$//)
 		{
-			$mode=$1;
+			$mode=$2;
 			$Modes{$mode}=1;
 		}
 		
@@ -323,7 +318,8 @@ sub readConfig {
 		
 		if(/^\s*\[\s*([^\]\s]+)\s*\]\s*$/)
 		{
-			$Modes{".$1"}=1;
+			$Modes{$1}=1;
+			$mode = $1;
 			next;
 		}
 		
@@ -359,7 +355,7 @@ sub usage {
 		print STDERR <<"EOT";
 $msg;
 For further help type $::PGM -help
-or consult docs at http://www.meteorserver.org/
+or consult docs at http://meteorserver.org/
 EOT
 
 	} else {
@@ -391,7 +387,7 @@ configuration file. The default location for this file is:
 	$Defaults{'ConfigFileLocation'}
 
 For more information and complete documentation, see the Meteor
-website at http://www.meteorserver.org/
+website at http://meteorserver.org/
 EOT
 
 	}

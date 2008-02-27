@@ -63,9 +63,7 @@ sub newWithID {
 	$self->{'text'}=$text;
 	
 	$::Statistics->{'unique_messages'}++;
-	
-	&::syslog('debug',"New message $id");
-	
+		
 	$self;
 }
 

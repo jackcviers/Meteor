@@ -197,7 +197,7 @@ sub checkHandleBits {
 		{
 			# Connection closed
 			$self->{'remoteClosed'}=1;
-			$self->close();
+			$self->close(1, 'remoteClosed');
 			
 			return;
 		}
@@ -207,7 +207,7 @@ sub checkHandleBits {
 			{
 				&::syslog('notice',"Connection closed: $!");
 				$self->{'remoteClosed'}=1;
-				$self->close();
+				$self->close(1, 'remoteClosed');
 				
 				return;
 			}
@@ -244,7 +244,7 @@ sub checkHandleBits {
 			{
 				&::syslog('notice',"Connection closed: $!");
 				$self->{'remoteClosed'}=1;
-				$self->close();
+				$self->close(1, 'remoteClosed');
 				
 				return;
 			}
@@ -285,7 +285,8 @@ sub close {
 	# Remove connection from list of connections
 	#
 	my $idx=undef;
-	for(my $i=0;$i<scalar(@Connections);$i++)
+	my $numcon = scalar(@Connections);
+	for(my $i=0;$i<$numcon;$i++)
 	{
 		if($Connections[$i]==$self)
 		{
