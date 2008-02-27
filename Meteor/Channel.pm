@@ -77,23 +77,6 @@ sub listChannels {
 	$list;
 }
 
-sub listChannelsUsingTemplate {
-	my $class=shift;
-	my $template=shift;
-	
-	return '' unless(defined($template) && $template ne '');
-	
-	my $list='';
-	foreach my $channelName (sort keys %Channels)
-	{
-		my $channel=$Channels{$channelName};
-		
-		$list.=$channel->descriptionWithTemplate($template);
-	}
-	
-	$list;
-}
-
 sub deleteChannel {
 	my $class=shift;
 	my $channelName=shift;
@@ -180,6 +163,7 @@ sub addSubscriber {
 	
 	&::syslog('info','',
 		'joinchannel',
+		$subscriber->{'ip'},
 		$subscriber->{'subscriberID'},
 		$self->{'name'},
 		$mode,
@@ -206,10 +190,9 @@ sub removeSubscriber {
 	
 	my $idx=undef;
 	my $numsubs = scalar(@{$self->{'subscribers'}});
-	for(my $i=0;$i<$numsubs;$i++)
-	{
-		if($self->{'subscribers'}->[$i]==$subscriber)
-		{
+
+	for (my $i=0; $i<$numsubs; $i++) {
+		if($self->{'subscribers'}->[$i]==$subscriber) {
 			$idx=$i;
 			last;
 		}
@@ -222,6 +205,7 @@ sub removeSubscriber {
 		my $timeConnected = time - $subscriber->{'ConnectionStart'};
 		&::syslog('info','',
 			'leavechannel',
+			$subscriber->{'ip'},
 			$subscriber->{'subscriberID'},
 			$self->{'name'},
 			$timeConnected,
@@ -365,6 +349,8 @@ sub descriptionWithTemplate {
 	my $self=shift;
 	my $template=shift;
 	
+	return '' unless(defined($template) && $template ne '');
+	
 	$template=~s/~([a-zA-Z0-9_]*)~/
 		if(!defined($1) || $1 eq '') {
 			'~';
@@ -373,7 +359,7 @@ sub descriptionWithTemplate {
 		} elsif($1 eq 'subscriberCount') {
 			$self->subscriberCount();
 		} elsif($1 eq 'lastMsgID') {
-			$self->lastMsgID();
+			$self->lastMsgID() || 0;
 		} elsif($1 eq 'name') {
 			$self->{'name'};
 		} else {

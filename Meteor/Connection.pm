@@ -110,8 +110,8 @@ sub newFromServer {
 	
 	$self->{'writeBuffer'}='';
 	$self->{'readBuffer'}='';
-	
 	$self->{'bytesWritten'}=0;
+	$self->{'ip'}=$socket->{'connection'}->{'remoteIP'};
 	
 	push(@Connections,$self);
 	
@@ -231,7 +231,7 @@ sub checkHandleBits {
 			if(length($self->{'writeBuffer'})==0)
 			{
 				delete($self->{'writeBufferTimestamp'});
-				$self->close() if(exists($self->{'autoClose'}));
+				$self->close(1) if(exists($self->{'autoClose'}));
 			}
 			else
 			{

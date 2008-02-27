@@ -167,10 +167,22 @@ sub processLine {
 				$PersistentConnections{$self->{'subscriberID'}}=$self;
 			}
 			
-			if(scalar(keys %{$channels}))
-			{
+			if(scalar(keys %{$channels})) {
+
+				$self->{'channelinfo'} = '';
+				my $citemplate = $self->getConf('ChannelInfoTemplate');
+				foreach $channelName (keys %{$channels}) {
+					my $channel=Meteor::Channel->channelWithName($channelName);
+					$self->{'channels'}->{$channelName}=$channel;
+					$self->{'channelinfo'} .= $channel->descriptionWithTemplate($citemplate);
+					
+				}
 				$self->emitOKHeader();
-				$self->setChannels($channels,$persist,$self->{'mode'},$useragent);
+				foreach $channelName (keys %{$channels}) {
+					my $startIndex=$channels->{$channelName}->{'startIndex'};
+					$self->{'channels'}->{$channelName}->addSubscriber($self,$startIndex,$persist,$self->{'mode'},$useragent);
+				}
+				delete ($self->{'channels'}) unless($persist);
 				$self->close(1, 'responseComplete') unless($persist);
 				return;
 			}
@@ -193,25 +205,6 @@ sub processLine {
 		# If we fall through we did not understand the request
 		#
 		$self->emitErrorHeader();
-	}
-}
-
-sub setChannels {
-	my $self=shift;
-	my $channels=shift;
-	my $persist=shift;
-	my $mode=shift || '';
-	my $userAgent=shift || '';
-	
-	foreach my $channelName (keys %{$channels})
-	{
-		my $startIndex=$channels->{$channelName}->{'startIndex'};
-		
-		my $channel=Meteor::Channel->channelWithName($channelName);
-		
-		$self->{'channels'}->{$channelName}=$channel if($persist);
-		
-		$channel->addSubscriber($self,$startIndex,$persist,$mode,$userAgent);
 	}
 }
 
@@ -238,28 +231,17 @@ sub emitHeader {
 	my $header=$self->getConf('HeaderTemplate');
 	
 	$header=~s/~([^~]*)~/
-		if(!defined($1) || $1 eq '')
-		{
+		if(!defined($1) || $1 eq '') {
 			'~';
-		}
-		elsif($1 eq 'server')
-		{
+		} elsif($1 eq 'server') {
 			$::PGM;
-		}
-		elsif($1 eq 'status')
-		{
+		} elsif($1 eq 'status') {
 			$status;
-		}
-		elsif($1 eq 'servertime')
-		{
+		} elsif($1 eq 'servertime') {
 			time;
-		}
-		elsif($1 eq 'channelinfo')
-		{
-			Meteor::Channel->listChannelsUsingTemplate($self->getConf('ChannelInfoTemplate'));
-		}
-		else
-		{
+		} elsif($1 eq 'channelinfo') {
+			$self->{'channelinfo'};
+		} else {
 			'';
 		}
 	/gex;

@@ -36,6 +36,7 @@ Meteor = {
 		ifr.p = Meteor.process;
 		ifr.r = Meteor.reset;
 		ifr.eof = Meteor.eof;
+		ifr.ch = Meteor.channelInfo;
 		clearTimeout(Meteor.frameloadtimer);
 		Meteor.setstatus(4);
 		Meteor.log("Frame registered");
@@ -162,16 +163,16 @@ Meteor = {
 		Meteor.log("Ping timeout");
 		Meteor.mode="smartpoll";
 		clearTimeout(Meteor.pingtimer);
-		Meteor.connect();
 		Meteor.callbacks["changemode"]("poll");
 		Meteor.lastpingtime = false;
+		Meteor.connect();
 	},
 
 	process: function(id, channel, data) {
 		if (id == -1) {
 			Meteor.log("Ping");
 			Meteor.ping();
-		} else if (typeof(Meteor.channels[channel]) != "undefined" && id > Meteor.channels[channel].lastmsgreceived) {
+		} else if (typeof(Meteor.channels[channel]) != "undefined") {
 			Meteor.log("Message "+id+" received on channel "+channel+" (last id on channel: "+Meteor.channels[channel].lastmsgreceived+")\n"+data);
 			Meteor.callbacks["process"](data);
 			Meteor.channels[channel].lastmsgreceived = id;
@@ -207,6 +208,12 @@ Meteor = {
 
 	eof: function() {
 		Meteor.callbacks["eof"]();
+		Meteor.disconnect();
+	},
+
+	channelInfo: function(channel, id) {
+		Meteor.channels[channel].lastmsgreceived = id;
+		Meteor.log("Received channel info for channel "+channel+": resume from "+id);
 	},
 
 	updatepollfreq: function() {
@@ -242,7 +249,7 @@ Meteor = {
 		Meteor.log("Frame load timeout");
 		if (Meteor.frameloadtimer) clearTimeout(Meteor.frameloadtimer);
 		Meteor.setstatus(3);
-		setTimeout(Meteor.connect, 5000);
+		Meteor.pollmode();
 	},
 
 	extract_xss_domain: function(old_domain) {

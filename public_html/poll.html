@@ -55,7 +55,7 @@ function handleresponse() {
 		} catch (e) { return false };
 		newdata = pollreq.responseText;
 		while (1) {
-			var x = newdata.indexOf("<s"+"cript>p(");
+			var x = newdata.indexOf("<s"+"cript>");
 			if (x != -1) {
 				y = newdata.indexOf("</"+"script>", x);
 				if (y != -1) {
