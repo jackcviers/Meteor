@@ -147,7 +147,7 @@ sub processLine {
 			my $channelName;
 			my $offset;
 			foreach my $chandef (@channelData) {
-				if($chandef=~/^([a-z0-9]+)(.(r|b|h)([0-9]*))?$/i) {
+				if($chandef=~/^([a-z0-9_\-\%]+)(.(r|b|h)([0-9]*))?$/i) {
 					$channelName = $1;
 					$channels->{$channelName}->{'startIndex'} = undef;
 					if ($3) {

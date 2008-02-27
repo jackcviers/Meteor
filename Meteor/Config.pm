@@ -63,7 +63,7 @@ package Meteor::Config;
 'Name of index file to serve when a directory is requested from the static file web server',
 	DirectoryIndex	=> 'index.html',
 
-'Header template, ~server~, ~servertime~ and ~status~ will be replaced by the appropriate values.  **NOTE**: It is possible to define more than one HeaderTemplate by appending a number at the end, for example *HeaderTemplate42*. Clients can request a specific header to be used by adding the parameter template=<number> to their GET request. If *HeaderTemplate<number>* is not found, the system will use the default HeaderTemplate (no number)',
+'Header template, ~server~, ~servertime~ and ~status~ will be replaced by the appropriate values.',
 	HeaderTemplate			=> 'HeaderTemplate HTTP/1.1 ~status~\r\nServer: ~server~\r\nContent-Type: text/html; charset=utf-8\r\nPragma: no-cache\r\nCache-Control: no-cache, no-store, must-revalidate\r\nExpires: Thu, 1 Jan 1970 00:00:00 GMT\r\n\r\n',
 
 'Print out this help message',
@@ -93,7 +93,7 @@ package Meteor::Config;
 'Persistence of a connection.',
 	Persist					=> 0,
 
-'Message to be sent to all persistent and identified subscriber connections (see above) every PingInterval seconds',
+'Message to be sent to all persistent subscriber connections (see above) every PingInterval seconds',
 	PingMessage				=> '<script>p(-1,"");</script>\r\n',
 
 'IP address for subscriber server (leave empty for all local addresses)',
