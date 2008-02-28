@@ -134,7 +134,7 @@ sub processLine {
 		#
 		# Find the 'GET' line
 		#
-		if($self->{'headerBuffer'}=~/GET\s+$::CONF{'SubscriberDynamicPageAddress'}\/([0-9a-z]+)\/([0-9a-z]+)\/([a-z0-9_\-\%\.]+).*?/i)
+		if($self->{'headerBuffer'}=~/GET\s+$::CONF{'SubscriberDynamicPageAddress'}\/([0-9a-z]+)\/([0-9a-z]+)\/([a-z0-9_\-\%\.\/]+).*?/i)
 		{
 			$self->{'subscriberID'}=$1;
 			$self->{'mode'}=$2;
