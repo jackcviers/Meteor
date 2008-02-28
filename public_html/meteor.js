@@ -96,7 +96,8 @@ Meteor = {
 			clearTimeout(Meteor.updatepollfreqtimer);
 			clearTimeout(Meteor.frameloadtimer);
 			if (typeof CollectGarbage == 'function') CollectGarbage();
-			Meteor.setstatus(0);
+			if (Meteor.status != 6) Meteor.setstatus(0);
+			Meteor.log("Disconnected");
 		}
 	},
 	
@@ -121,6 +122,8 @@ Meteor = {
 				surl += ".h";
 			}
 		}
+		var now = new Date();
+		surl += "?nc="+now.getTime();
 		return surl;
 	},
 
@@ -196,18 +199,22 @@ Meteor = {
 	},
 
 	reset: function() {
-		Meteor.log("Stream reset");
-		Meteor.ping();
-		Meteor.callbacks["reset"]();
-		var now = new Date();
-		var t = now.getTime();
-		var x = Meteor.pollfreq - (t-Meteor.lastrequest);
-		if (x < 10) x = 10;
-		setTimeout(Meteor.connect, x);
+		if (Meteor.status != 6) {
+			Meteor.log("Stream reset");
+			Meteor.ping();
+			Meteor.callbacks["reset"]();
+			var now = new Date();
+			var t = now.getTime();
+			var x = Meteor.pollfreq - (t-Meteor.lastrequest);
+			if (x < 10) x = 10;
+			setTimeout(Meteor.connect, x);
+		}
 	},
 
 	eof: function() {
+		Meteor.log("Received end of stream, will not reconnect");
 		Meteor.callbacks["eof"]();
+		Meteor.setstatus(6);
 		Meteor.disconnect();
 	},
 
@@ -265,6 +272,7 @@ Meteor = {
 		//				3 = Controller frame timeout, retrying.
 		//				4 = Controller frame loaded and ready
 		//				5 = Receiving data
+		//				6 = End of stream, will not reconnect
 
 		if (Meteor.status != newstatus) {
 			Meteor.status = newstatus;
