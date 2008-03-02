@@ -64,7 +64,7 @@ package Meteor::Config;
 	DirectoryIndex	=> 'index.html',
 
 'Header template, ~server~, ~servertime~ and ~status~ will be replaced by the appropriate values.',
-	HeaderTemplate			=> 'HeaderTemplate HTTP/1.1 ~status~\r\nServer: ~server~\r\nContent-Type: text/html; charset=utf-8\r\nPragma: no-cache\r\nCache-Control: no-cache, no-store, must-revalidate\r\nExpires: Thu, 1 Jan 1970 00:00:00 GMT\r\n\r\n',
+	HeaderTemplate			=> 'HTTP/1.1 ~status~\r\nServer: ~server~\r\nContent-Type: text/html; charset=utf-8\r\nPragma: no-cache\r\nCache-Control: no-cache, no-store, must-revalidate\r\nExpires: Thu, 1 Jan 1970 00:00:00 GMT\r\n\r\n',
 
 'Print out this help message',
 	Help					=> '',
