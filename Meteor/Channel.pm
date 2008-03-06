@@ -359,7 +359,7 @@ sub descriptionWithTemplate {
 		} elsif($1 eq 'subscriberCount') {
 			$self->subscriberCount();
 		} elsif($1 eq 'lastMsgID') {
-			$self->lastMsgID() || 0;
+			$self->lastMsgID() || 1;
 		} elsif($1 eq 'name') {
 			$self->{'name'};
 		} else {
