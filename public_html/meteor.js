@@ -44,7 +44,7 @@ Meteor = {
 
 	joinChannel: function(channelname, backtrack) {
 		if (typeof(Meteor.channels[channelname]) != "undefined") throw "Cannot join channel "+channelname+": already subscribed";
-		Meteor.channels[channelname] = {backtrack:backtrack, lastmsgreceived:0};
+		Meteor.channels[channelname] = {backtrack:backtrack};
 		Meteor.log("Joined channel "+channelname);
 		Meteor.channelcount++;
 		if (Meteor.status != 0) Meteor.connect();
@@ -54,8 +54,9 @@ Meteor = {
 		if (typeof(Meteor.channels[channelname]) == "undefined") throw "Cannot leave channel "+channelname+": not subscribed";
 		delete Meteor.channels[channelname];
 		Meteor.log("Left channel "+channelname);
-		if (Meteor.status != 0) Meteor.connect();
 		Meteor.channelcount--;
+		if (Meteor.channelcount && Meteor.status != 0) Meteor.connect();
+		else Meteor.disconnect();
 	},
 
 	connect: function() {
@@ -97,6 +98,13 @@ Meteor = {
 			clearTimeout(Meteor.frameloadtimer);
 			if (typeof CollectGarbage == 'function') CollectGarbage();
 			if (Meteor.status != 6) Meteor.setstatus(0);
+			try {
+				Meteor.frameref.open();
+				Meteor.frameref.close();
+			} catch (e) {
+				Meteor.frameref.parentNode.removeChild(Meteor.frameref);
+			}
+			delete Meteor.frameref;
 			Meteor.log("Disconnected");
 		}
 	},
@@ -114,11 +122,11 @@ Meteor = {
 		var surl = "http://" + Meteor.host + ((Meteor.port==80)?"":":"+Meteor.port) + "/push/" + Meteor.hostid + "/" + Meteor.mode;
 		for (var c in Meteor.channels) {
 			surl += "/"+c;
-			if (Meteor.channels[c].lastmsgreceived > 0) {
+			if (typeof Meteor.channels[c].lastmsgreceived != 'undefined' && Meteor.channels[c].lastmsgreceived >= 0) {
 				surl += ".r"+(Meteor.channels[c].lastmsgreceived+1);
 			} else if (Meteor.channels[c].backtrack > 0) {
 				surl += ".b"+Meteor.channels[c].backtrack;
-			} else if (Meteor.channels[c].backtrack < 0 || isNaN(Meteor.channels[c].backtrack)) {
+			} else if (Meteor.channels[c].backtrack != undefined) {
 				surl += ".h";
 			}
 		}
