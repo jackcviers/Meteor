@@ -85,7 +85,7 @@ Meteor = {
 			Meteor.loadFrame("http://"+Meteor.host+((Meteor.port==80)?"":":"+Meteor.port)+"/poll.html");
 			Meteor.recvtimes[0] = t;
 			if (Meteor.updatepollfreqtimer) clearTimeout(Meteor.updatepollfreqtimer);
-			if (Meteor.mode=='smartpoll') Meteor.updatepollfreqtimer = setInterval(Meteor.updatepollfreq, 2500);
+			if (Meteor.mode=='smartpoll') Meteor.updatepollfreqtimer = setInterval(Meteor.updatepollfreq, 10000);
 			if (Meteor.mode=='longpoll') Meteor.pollfreq = Meteor.minpollfreq;
 		}
 		Meteor.lastrequest = t;
@@ -98,11 +98,11 @@ Meteor = {
 			clearTimeout(Meteor.frameloadtimer);
 			if (typeof CollectGarbage == 'function') CollectGarbage();
 			if (Meteor.status != 6) Meteor.setstatus(0);
-			try {
+			if (Meteor.frameref.tagName=='IFRAME') {
+				Meteor.frameref.parentNode.removeChild(Meteor.frameref);
+			} else {
 				Meteor.frameref.open();
 				Meteor.frameref.close();
-			} catch (e) {
-				Meteor.frameref.parentNode.removeChild(Meteor.frameref);
 			}
 			delete Meteor.frameref;
 			Meteor.log("Disconnected");
@@ -172,10 +172,12 @@ Meteor = {
 
 	pollmode: function() {
 		Meteor.log("Ping timeout");
-		Meteor.mode="smartpoll";
-		clearTimeout(Meteor.pingtimer);
-		Meteor.callbacks["changemode"]("poll");
-		Meteor.lastpingtime = false;
+		if (Meteor.mode != "smartpoll") {
+			Meteor.mode="smartpoll";
+			Meteor.callbacks["changemode"]("poll");
+			clearTimeout(Meteor.pingtimer);
+			Meteor.lastpingtime = false;
+		}
 		Meteor.connect();
 	},
 
