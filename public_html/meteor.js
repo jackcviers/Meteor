@@ -47,7 +47,7 @@ Meteor = {
 		Meteor.channels[channelname] = {backtrack:backtrack};
 		Meteor.log("Joined channel "+channelname);
 		Meteor.channelcount++;
-		if (Meteor.status != 0) Meteor.connect();
+		if (Meteor.status != 0 && Meteor.status != 6) Meteor.connect();
 	},
 
 	leaveChannel: function(channelname) {
@@ -55,7 +55,7 @@ Meteor = {
 		delete Meteor.channels[channelname];
 		Meteor.log("Left channel "+channelname);
 		Meteor.channelcount--;
-		if (Meteor.channelcount && Meteor.status != 0) Meteor.connect();
+		if (Meteor.channelcount && Meteor.status != 0 && Meteor.status != 6) Meteor.connect();
 		else Meteor.disconnect();
 	},
 
@@ -98,14 +98,9 @@ Meteor = {
 			clearTimeout(Meteor.frameloadtimer);
 			if (typeof CollectGarbage == 'function') CollectGarbage();
 			if (Meteor.status != 6) Meteor.setstatus(0);
-			if (Meteor.frameref.tagName=='IFRAME') {
-				Meteor.frameref.parentNode.removeChild(Meteor.frameref);
-			} else {
-				Meteor.frameref.open();
-				Meteor.frameref.close();
-			}
-			delete Meteor.frameref;
 			Meteor.log("Disconnected");
+			try { Meteor.frameref.parentNode.removeChild(Meteor.frameref); delete Meteor.frameref; return true; } catch(e) { }
+			try { Meteor.frameref.open(); Meteor.frameref.close(); return true; } catch(e) {}			
 		}
 	},
 	
@@ -209,7 +204,7 @@ Meteor = {
 	},
 
 	reset: function() {
-		if (Meteor.status != 6) {
+		if (Meteor.status != 6 && Meteor.status != 0) {
 			Meteor.log("Stream reset");
 			Meteor.ping();
 			Meteor.callbacks["reset"]();

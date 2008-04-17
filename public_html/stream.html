@@ -50,6 +50,7 @@ function extractEvents(responsestr) {
 			y = newdata.indexOf("</"+"script>", x);
 			if (y != -1) {
 				eval(newdata.substring((x+8),y));
+				if (typeof newdata == 'undefined') break;  // If message was eof() then we're now in a freed script
 				newdata = newdata.substring(y+9);
 			} else {
 
