@@ -55,14 +55,12 @@ sub newFromServer {
 	my $self=$class->SUPER::newFromServer(shift);
 	
 	$self->{'headerBuffer'}='';
-	$self->{'MessageCount'}=0;
-	$self->{'MaxMessageCount'}=0;
+	$self->{'messageCount'}=0;
 	
-	$self->{'ConnectionStart'}=time;
 	my $maxTime=$::CONF{'MaxTime'};
 	if($maxTime>0)
 	{
-		$self->{'ConnectionTimeLimit'}=$self->{'ConnectionStart'}+$maxTime;
+		$self->{'connectionTimeLimit'}=$self->{'connectionStart'}+$maxTime;
 	}
 	
 	$::Statistics->{'current_subscribers'}++;
@@ -82,6 +80,13 @@ sub deleteSubscriberWithID {
 	{
 		$PersistentConnections{$id}->close(0,'newSubscriberWithSameID');
 	}
+}
+
+sub subscriberExists {
+	my $class=shift;
+	my $id=shift;
+
+	return exists($PersistentConnections{$id});
 }
 
 sub pingPersistentConnections {
@@ -106,6 +111,17 @@ sub numSubscribers {
 	return scalar(keys %PersistentConnections);
 }
 
+sub listSubscribers {
+	my $class=shift;
+	my $list='';
+	foreach my $subscriber (keys %PersistentConnections)
+	{
+		my $sub = $PersistentConnections{$subscriber};
+		$list .= $subscriber.' '.$sub->{'ip'}.' '.$sub->{'connectionStart'}.' '.$sub->{'connectionTimeLimit'}.' '.($sub->{'connectionTimeLimit'}-time).' '.$sub->{'messageCount'}.' "'.$sub->{'useragent'}."\"$::CRLF";
+	}
+	$list;
+}
+
 ###############################################################################
 # Instance methods
 ###############################################################################
@@ -113,7 +129,7 @@ sub processLine {
 	my $self=shift;
 	my $line=shift;
 	
-	# Once the header was processed we ignore any input
+	# Once the header was processed we ignore any input - Meteor does not accept or process request bodies
 	return unless(exists($self->{'headerBuffer'}));
 	
 	if($line ne '')
@@ -140,7 +156,7 @@ sub processLine {
 			$self->{'mode'}=$2;
 			my $persist=$self->getConf('Persist');
 			my $maxTime=$self->getConf('MaxTime');
-			$self->{'ConnectionTimeLimit'} = ($self->{'ConnectionStart'}+$maxTime) if ($maxTime>0);
+			$self->{'connectionTimeLimit'} = ($self->{'connectionStart'}+$maxTime) if ($maxTime>0);
 			
 			my @channelData=split('/',$3);
 			my $channels={};
@@ -158,13 +174,15 @@ sub processLine {
 					}
 				}
 			}
-			my $useragent = ($self->{'headerBuffer'}=~/User-Agent: (.+)/i) ? $1 : "-";
-			
-			delete($self->{'headerBuffer'});
+			$self->{'useragent'} = ($self->{'headerBuffer'}=~/User-Agent: (.+)/i) ? $1 : "-";
 			
 			if ($persist) {
+				# New persistent connection: kill any existing connection with same ID
 				$self->deleteSubscriberWithID($self->{'subscriberID'});
+				# Add new persistent connection to collection
 				$PersistentConnections{$self->{'subscriberID'}}=$self;
+			} else {
+				$::Pollers->{$self->{'subscriberID'}} = time;
 			}
 			
 			if(scalar(keys %{$channels})) {
@@ -174,16 +192,19 @@ sub processLine {
 				foreach $channelName (keys %{$channels}) {
 					my $channel=Meteor::Channel->channelWithName($channelName);
 					$self->{'channels'}->{$channelName}=$channel;
-					$self->{'channelinfo'} .= $channel->descriptionWithTemplate($citemplate);
-					
+					if (defined($self->{'channels'}->{$channelName}->{'startIndex'}) && $self->{'channels'}->{$channelName}->{'startIndex'} > 0) {
+						$self->{'channelinfo'} .= $channel->descriptionWithTemplate($citemplate);
+					}
 				}
 				$self->emitOKHeader();
 				foreach $channelName (keys %{$channels}) {
 					my $startIndex=$channels->{$channelName}->{'startIndex'};
-					$self->{'channels'}->{$channelName}->addSubscriber($self,$startIndex,$persist,$self->{'mode'},$useragent);
+					$self->{'channels'}->{$channelName}->addSubscriber($self,$startIndex,$persist,$self->{'mode'},$self->{'useragent'});
 				}
 				delete ($self->{'channels'}) unless($persist);
 				$self->close(1, 'responseComplete') unless($persist);
+				$self->close(1, 'closedOnEvent') unless($self->{'messageCount'} == 0);
+				delete($self->{'headerBuffer'});
 				return;
 			}
 		}
@@ -268,21 +289,15 @@ sub sendMessages {
 	
 	$::Statistics->{'messages_served'}+=$numMessages;
 	
-	my $msgCount=$self->{'MessageCount'};
+	my $msgCount=$self->{'messageCount'};
 	$msgCount+=$numMessages;
-	$self->{'MessageCount'}=$msgCount;
+	$self->{'messageCount'}=$msgCount;
 	
-	my $maxMsg=$self->getConf('MaxMessages');
-	if(defined($maxMsg) && $maxMsg>0 && $msgCount>=$maxMsg)
-	{
-		$self->close(1, 'maxMessageCountReached');
+	# If long polling, close connection, as a message has now been sent.
+	# Don't close if still processing the header (we may be sending a backlog from multiple channels)
+	if($self->getConf('CloseOnEvent') && !exists($self->{'headerBuffer'})) {
+		$self->close(1, 'closedOnEvent');
 	}
-	
-	if($self->{'MaxMessageCount'}>0 && $msgCount>=$self->{'MaxMessageCount'})
-	{
-		$self->close(1, 'maxMessageCountReached');
-	}
-	
 }
 
 sub ping {
@@ -336,7 +351,13 @@ sub close {
 			$self->write($msg);
 		}
 	}
-	
+
+	my $fmsg=$self->getConf('FooterTemplate');
+	if(defined($fmsg) && $fmsg ne '')
+	{
+		$self->write($fmsg);
+	}
+
 	$self->SUPER::close();
 }
 
@@ -349,7 +370,7 @@ sub checkForMaxTime {
 	my $self=shift;
 	my $time=shift;
 	
-	$self->close(1,'maxTime') if(exists($self->{'ConnectionTimeLimit'}) && $self->{'ConnectionTimeLimit'}<$time);
+	$self->close(1,'maxTime') if(exists($self->{'connectionTimeLimit'}) && $self->{'connectionTimeLimit'}<$time);
 }
 
 sub getConf {

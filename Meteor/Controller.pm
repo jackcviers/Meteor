@@ -70,7 +70,7 @@ sub processLine {
 	# COUNTSUBSCRIBERS channel1
 	# < OK 344
 	
-	unless($line=~s/^(ADDMESSAGE|COUNTSUBSCRIBERS|LISTCHANNELS|SHOWSTATS|QUIT)//)
+	unless($line=~s/^(ADDMESSAGE|COUNTSUBSCRIBERS|LISTCHANNELS|LISTSUBSCRIBERS|LISTCONNECTIONS|DESCRIBE|SHOWSTATS|QUIT)//)
 	{
 		$self->write("ERR Invalid command syntax$::CRLF");
 		
@@ -99,7 +99,6 @@ sub processLine {
 		unless($line=~s/^\s+(\S+)$//)
 		{
 			$self->write("ERR Invalid command syntax$::CRLF");
-			
 			return;
 		}
 		
@@ -115,13 +114,55 @@ sub processLine {
 		unless($line eq '')
 		{
 			$self->write("ERR Invalid command syntax$::CRLF");
-			
 			return;
 		}
 		
 		my $txt="OK$::CRLF".Meteor::Channel->listChannels()."--EOT--$::CRLF";
 		
 		$self->write($txt);
+	}
+	elsif($cmd eq 'LISTSUBSCRIBERS')
+	{
+		unless($line eq '')
+		{
+			$self->write("ERR Invalid command syntax$::CRLF");
+			return;
+		}
+		
+		my $txt="OK$::CRLF".Meteor::Subscriber->listSubscribers()."--EOT--$::CRLF";
+		
+		$self->write($txt);
+	}
+	elsif($cmd eq 'LISTCONNECTIONS')
+	{
+		unless($line eq '')
+		{
+			$self->write("ERR Invalid command syntax$::CRLF");
+			return;
+		}
+		
+		my $txt="OK$::CRLF".Meteor::Connection->listConnections()."--EOT--$::CRLF";
+		
+		$self->write($txt);
+	}
+	elsif($cmd eq 'DESCRIBE')
+	{
+		unless($line=~s/^\s+(\S+)$//)
+		{
+			$self->write("ERR Invalid command syntax$::CRLF");
+			return;
+		}
+		
+		my $filenum=$1;
+		my $condesc=Meteor::Connection->describeConnWithFileNum($filenum);
+		if ($condesc != -1) {
+			$self->write("OK$::CRLF");
+			$self->write($condesc);
+			$self->write("--EOT--$::CRLF");
+
+		} else {
+			$self->write("ERR Unknown client$::CRLF");
+		}		
 	}
 	elsif($cmd eq 'SHOWSTATS')
 	{
@@ -133,6 +174,25 @@ sub processLine {
 		my $numChannels=Meteor::Channel->numChannels();
 		$txt.="channel_count: $numChannels$::CRLF";
 		
+		# connection_count
+		my $numConnections=Meteor::Connection->connectionCount();
+		$txt.="connection_count: $numConnections$::CRLF";
+
+		# subscriber count = current_subscribers + number of pollers in last minute
+		my $now = time; my $numpoll = 0;
+		foreach my $key (keys %{$::Pollers}) {
+			if($::Pollers->{$key} < ($now-60) || Meteor::Subscriber->subscriberExists($key)) {
+				delete $::Pollers->{$key};
+			} else {
+				$numpoll++;
+			}
+		}
+		my $numsub = 0;
+		if (exists($::Statistics->{'current_subscribers'})) {
+			$numsub = $::Statistics->{'current_subscribers'};
+		}
+		$txt.="real_subscribers: ".($numpoll+$numsub)."$::CRLF";
+
 		foreach my $key (keys %{$::Statistics})
 		{
 			$txt.=$key.': '.$::Statistics->{$key}.$::CRLF;

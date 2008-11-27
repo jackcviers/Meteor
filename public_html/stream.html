@@ -14,10 +14,13 @@ function abort() {
 }
 
 function newXmlHttp() {
-    try { return new ActiveXObject("Msxml2.XMLHTTP"); } catch (e) {}
-    try { return new ActiveXObject("Microsoft.XMLHTTP"); } catch (e) {}
-    try { return new XMLHttpRequest(); } catch(e) {}
-    return null;
+	var xhr = null;
+	try { xhr = new ActiveXObject("Msxml2.XMLHTTP"); } catch (e) {
+		try { xhr = new ActiveXObject("Microsoft.XMLHTTP"); } catch (e) {
+			try { xhr = new XMLHttpRequest(); } catch(e) { return false }
+		}
+	}
+	return xhr;
 }
 
 function startstream() {
@@ -39,6 +42,7 @@ function startstream() {
 		}
 	}
 	streamreq.send(null);
+	parent.Meteor.lastrequest = parent.Meteor.time();
 }
 
 function extractEvents(responsestr) {
@@ -64,7 +68,6 @@ function extractEvents(responsestr) {
 		}
 	}
 }
-
 
 
 startstream();

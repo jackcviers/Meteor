@@ -27,10 +27,27 @@ Meteor = {
 	pingtimer: null,
 	pollfreq: 3000,
 	port: 80,
+	pollaborted: false,
+	pollhost: null,
+	pollnum: 0,
 	polltimeout: 30000,
+	polltimer: null,
 	recvtimes: [],
+	lastrequest: null,
 	status: 0,
 	updatepollfreqtimer: null,
+
+	isSupportedBrowser: function() {
+		var v;
+		if (v = navigator.userAgent.match(/compatible\; MSIE\ ([0-9\.]+)\;/i)) {
+			if (parseFloat(v[1]) <= 5.5) return false;
+		} else if (v = navigator.userAgent.match(/Gecko\/([0-9]+)/i)) {
+			if (parseInt(v[1]) <= 20051015) return false;
+		} else if (v = navigator.userAgent.match(/WebKit\/([0-9\.]+)/i)) {
+			if (parseFloat(v[1]) < 400) return false;
+		}
+		return true;
+	},
 
 	register: function(ifr) {
 		ifr.p = Meteor.process;
@@ -66,9 +83,7 @@ Meteor = {
 		if (!Meteor.channelcount) throw "No channels specified";
 		if (Meteor.status) Meteor.disconnect();
 		Meteor.setstatus(1);
-		var now = new Date();
-		var t = now.getTime();
-		if (!Meteor.hostid) Meteor.hostid = t+""+Math.floor(Math.random()*1000000)
+		if (!Meteor.hostid) Meteor.hostid = Meteor.time()+""+Math.floor(Math.random()*1000000)
 		document.domain = Meteor.extract_xss_domain(document.domain);
 		if (Meteor.mode=="stream") Meteor.mode = Meteor.selectStreamTransport();
 		Meteor.log("Selected "+Meteor.mode+" transport");
@@ -82,13 +97,12 @@ Meteor = {
 			Meteor.pingtimer = setTimeout(Meteor.pollmode, Meteor.pingtimeout);
 
 		} else {
-			Meteor.loadFrame("http://"+Meteor.host+((Meteor.port==80)?"":":"+Meteor.port)+"/poll.html");
-			Meteor.recvtimes[0] = t;
+			Meteor.recvtimes[0] = Meteor.time();
 			if (Meteor.updatepollfreqtimer) clearTimeout(Meteor.updatepollfreqtimer);
 			if (Meteor.mode=='smartpoll') Meteor.updatepollfreqtimer = setInterval(Meteor.updatepollfreq, 10000);
 			if (Meteor.mode=='longpoll') Meteor.pollfreq = Meteor.minpollfreq;
+			Meteor.poll();
 		}
-		Meteor.lastrequest = t;
 	},
 
 	disconnect: function() {
@@ -114,10 +128,11 @@ Meteor = {
 	},
 
 	getSubsUrl: function() {
-		var surl = "http://" + Meteor.host + ((Meteor.port==80)?"":":"+Meteor.port) + "/push/" + Meteor.hostid + "/" + Meteor.mode;
+		var host = ((Meteor.mode=='simplepoll' || Meteor.mode=='smartpoll' || Meteor.mode=='longpoll') && Meteor.pollhost) ? Meteor.pollhost : Meteor.host;
+		var surl = "http://" + host + ((Meteor.port==80)?"":":"+Meteor.port) + "/push/" + Meteor.hostid + "/" + Meteor.mode;
 		for (var c in Meteor.channels) {
 			surl += "/"+c;
-			if (typeof Meteor.channels[c].lastmsgreceived != 'undefined' && Meteor.channels[c].lastmsgreceived >= 0) {
+			if (typeof Meteor.channels[c].lastmsgreceived != 'undefined') {
 				surl += ".r"+(Meteor.channels[c].lastmsgreceived+1);
 			} else if (Meteor.channels[c].backtrack > 0) {
 				surl += ".b"+Meteor.channels[c].backtrack;
@@ -125,8 +140,7 @@ Meteor = {
 				surl += ".h";
 			}
 		}
-		var now = new Date();
-		surl += "?nc="+now.getTime();
+		surl += "?nc="+Meteor.time();
 		return surl;
 	},
 
@@ -185,8 +199,7 @@ Meteor = {
 			Meteor.callbacks["process"](data);
 			Meteor.channels[channel].lastmsgreceived = id;
 			if (Meteor.mode=="smartpoll") {
-				var now = new Date();
-				Meteor.recvtimes[Meteor.recvtimes.length] = now.getTime();
+				Meteor.recvtimes[Meteor.recvtimes.length] = Meteor.time();
 				while (Meteor.recvtimes.length > 5) Meteor.recvtimes.shift();
 			}
 		}
@@ -197,8 +210,7 @@ Meteor = {
 		if (Meteor.pingtimer) {
 			clearTimeout(Meteor.pingtimer);
 			Meteor.pingtimer = setTimeout(Meteor.pollmode, Meteor.pingtimeout);
-			var now = new Date();
-			Meteor.lastpingtime = now.getTime();
+			Meteor.lastpingtime = Meteor.time();
 		}
 		Meteor.setstatus(5);
 	},
@@ -208,9 +220,7 @@ Meteor = {
 			Meteor.log("Stream reset");
 			Meteor.ping();
 			Meteor.callbacks["reset"]();
-			var now = new Date();
-			var t = now.getTime();
-			var x = Meteor.pollfreq - (t-Meteor.lastrequest);
+			var x = Meteor.pollfreq - (Meteor.time()-Meteor.lastrequest);
 			if (x < 10) x = 10;
 			setTimeout(Meteor.connect, x);
 		}
@@ -229,13 +239,11 @@ Meteor = {
 	},
 
 	updatepollfreq: function() {
-		var now = new Date();
-		var t = now.getTime();
 		var avg = 0;
 		for (var i=1; i<Meteor.recvtimes.length; i++) {
 			avg += (Meteor.recvtimes[i]-Meteor.recvtimes[i-1]);
 		}
-		avg += (t-Meteor.recvtimes[Meteor.recvtimes.length-1]);
+		avg += (Meteor.time()-Meteor.recvtimes[Meteor.recvtimes.length-1]);
 		avg /= Meteor.recvtimes.length;
 		var target = avg/2;
 		if (target < Meteor.pollfreq && Meteor.pollfreq > Meteor.minpollfreq) Meteor.pollfreq = Math.ceil(Meteor.pollfreq*0.9);
@@ -293,6 +301,36 @@ Meteor = {
 				document.getElementById("meteorlogoutput").innerHTML += logstr+"<br/>";
 			}
 		}
+	},
+
+	poll: function() {
+		Meteor.pollaborted = 0;
+		try {
+			clearTimeout(Meteor.polltimer);
+		} catch (e) {};
+		Meteor.lastrequest = Meteor.time();
+		if (Meteor.polltimeout) Meteor.polltimer = setTimeout(Meteor.clearpoll, Meteor.polltimeout);
+		var scripttag = document.createElement("SCRIPT");
+		scripttag.type = "text/javascript";
+		scripttag.src = Meteor.getSubsUrl();
+		scripttag.id = "meteorpoll"+(++Meteor.pollnum);
+		scripttag.className = "meteorpoll";
+		document.getElementsByTagName("HEAD")[0].appendChild(scripttag);
+	},
+
+	clearpoll: function() {
+		var s = document.getElementById('meteorpoll'+Meteor.pollnum);
+		if (typeof s != 'undefined') s.parentNode.removeChild(s);
+		if (Meteor.status) {
+			var x = parent.Meteor.pollfreq - (Meteor.time()-Meteor.lastrequest);
+			if (x < 10) x = 10;
+			setTimeout(Meteor.poll, x);
+		}
+	},
+
+	time: function() {
+		var now = new Date();
+		return now.getTime();
 	}
 }
 

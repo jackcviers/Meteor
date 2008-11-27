@@ -4,7 +4,7 @@
 #   An HTTP server for the 2.0 web
 #   Copyright (c) 2006 contributing authors
 #
-#   Subscriber.pm
+#   Channel.pm
 #
 #	Description:
 #	A Meteor Channel
@@ -163,12 +163,9 @@ sub addSubscriber {
 	
 	&::syslog('info','',
 		'joinchannel',
-		$subscriber->{'ip'},
-		$subscriber->{'subscriberID'},
+		$subscriber->{'socketFN'},
 		$self->{'name'},
-		$mode,
-		$logStartIndex,
-		$userAgent
+		$logStartIndex
 	);
 	
 	return unless(defined($startIndex));
@@ -202,14 +199,14 @@ sub removeSubscriber {
 	{
 		splice(@{$self->{'subscribers'}},$idx,1);
 		
-		my $timeConnected = time - $subscriber->{'ConnectionStart'};
+		my $timeConnected = time - $subscriber->{'connectionStart'};
 		&::syslog('info','',
 			'leavechannel',
 			$subscriber->{'ip'},
 			$subscriber->{'subscriberID'},
 			$self->{'name'},
 			$timeConnected,
-			$subscriber->{'MessageCount'},
+			$subscriber->{'messageCount'},
 			$subscriber->{'bytesWritten'},
 			$reason
 		);

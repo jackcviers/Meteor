@@ -61,7 +61,7 @@ sub new {
 		$self={};
 		bless($self,$class);
 	}
-	
+
 	$self->{'timeout'}=0;
 	$self->{'buffer'}='';
 	

@@ -40,7 +40,9 @@ package Meteor::Syslog;
 ###############################################################################
 
 	$Meteor::Syslog::DEFAULT_FACILITY='daemon';
-	
+
+	$Meteor::Syslog::_lasttimestamp=0;
+	$Meteor::Syslog::_lasttimestring="";
 	$Meteor::Syslog::_open=0;		# set to 1 by _open
 	
 ###############################################################################
@@ -68,9 +70,16 @@ sub ::syslog {
 	if($debug || $facility eq 'none')
 	{
 		$format=~s/\%m/$!/g;
-		
-		my $time = ($::CONF{'LogTimeFormat'} eq 'unix') ? time : localtime(time);
-		
+				
+		my $time = time;
+		if ($::CONF{'LogTimeFormat'} ne 'unix') {
+			if ($Meteor::Syslog::_lasttimestamp != time) {
+				$Meteor::Syslog::_lasttimestring = localtime(time);
+				$Meteor::Syslog::_lasttimestamp = time;
+			}
+			$time = $Meteor::Syslog::_lasttimestring;
+		}
+
 		print STDERR "$time\t$priority\t";
 		print STDERR sprintf($format,@args);
 		print STDERR "\n" unless(substr($format,-1) eq "\n");

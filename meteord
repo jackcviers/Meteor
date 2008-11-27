@@ -35,7 +35,7 @@
 # meterod version
 ################################################################################
 	
-	$::VERSION='1.06.01';
+	$::VERSION='1.06.02';
 	$::RELEASE_DATE='not yet released';
 
 ###############################################################################
@@ -116,7 +116,9 @@
 			close(STDERR);
 			chdir("/");
 			umask(0);
+
 			# fork and exit parent
+			print STDERR "Exit: Fork\n";
 			exit if fork;
 			setpgrp(0, $$) if defined $SIG{TTOU};
 			$SIG{TTOU}='ignore' if defined $SIG{TTOU};
@@ -124,10 +126,10 @@
 			# Avoid 'stdin reopened for output' warning with newer perls
 			open(NULL,'/dev/null');
 			<NULL> if(0);
-			
 			open(OUT,">/var/run/$::PGM.pid");
 			print OUT "$$\n";
 			close(OUT);
+
 		}
 		else
 		{
@@ -143,7 +145,8 @@
 	$SIG{'TERM'}=sub{$::TERM=1};
 	$SIG{'USR1'}=sub{$::USR1=1};
 	$SIG{'USR2'}=sub{$::USR2=1};
-	
+	$SIG{'PIPE'}=sub{&::syslog('info',"Signal PIPE received and ignored\n");};
+
 	#
 	# Run server
 	#
@@ -195,6 +198,8 @@
 		{
 			while(!$::TERM)
 			{
+
+
 				my $rVec=$serverVector;
 				my $wVec='';
 				my $eVec='';
@@ -260,7 +265,7 @@
 					
 					Meteor::Channel->clearAllBuffers();
 				}
-				
+
 				if($::USR2)
 				{
 					$::USR2=0;
@@ -269,7 +274,7 @@
 					
 					Meteor::Document->clearDocuments()
 				}
-				
+
 				my $t=time;
 				if($t>$lastAgeCheck+$AGE_CHECK_INTERVALL)
 				{
@@ -279,6 +284,7 @@
 					$t=$lastAgeCheck;
 					
 					Meteor::Subscriber->checkPersistentConnectionsForMaxTime();
+					Meteor::Connection->destroyBadRequests();
 				}
 				
 				if(defined($nextPing) && $nextPing<=$t)
@@ -341,11 +347,13 @@
 		{
 			&::syslog('info',"$cnt client(s) unresponsive, will shutdown anyway");
 			
+			print STDERR "Exit: TERM Shutdown (unresponsive clients)\n";
 			exit(1);
 		}
 		
 		&::syslog('info',"shutdown succeeded");
 		
+		print STDERR "Exit: TERM Shutdown (clean)\n";
 		exit(0);
 	}
 	

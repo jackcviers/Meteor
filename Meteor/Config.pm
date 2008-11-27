@@ -42,7 +42,7 @@ package Meteor::Config;
 	use strict;
 	
 	our @DEFAULTS=(
-'Template for each line in channelinfo',
+'Template for each line in channelinfo.  Placeholders are name, lastMsgID, subscriberCount, messageCount.  Channel info is included in output when client does not give a message start index in its request (indicating it is the client\'s first request for that channel)',
 	ChannelInfoTemplate		=> '<script>ch("~name~", ~lastMsgID~);</script>\r\n',
 
 'Configuration file location on disk (if any)',
@@ -61,22 +61,25 @@ package Meteor::Config;
 	Debug					=> 0,
 	
 'Name of index file to serve when a directory is requested from the static file web server',
-	DirectoryIndex	=> 'index.html',
+	DirectoryIndex			=> 'index.html',
+
+'Footer template',
+	FooterTemplate			=> '</body></html>',
 
 'Header template, ~server~, ~servertime~ and ~status~ will be replaced by the appropriate values.',
-	HeaderTemplate			=> 'HTTP/1.1 ~status~\r\nServer: ~server~\r\nContent-Type: text/html; charset=utf-8\r\nPragma: no-cache\r\nCache-Control: no-cache, no-store, must-revalidate\r\nExpires: Thu, 1 Jan 1970 00:00:00 GMT\r\n\r\n',
+	HeaderTemplate			=> 'HTTP/1.1 ~status~\r\n\r\n~channelinfo~\r\n',
 
 'Print out this help message',
 	Help					=> '',
 
-'Format to use for timestamps in syslog: unix or human',
+'Format to use for timestamps in debug output: unix or human',
 	LogTimeFormat			=> 'human',
 
 'Maximum age of a message in seconds',
 	MaxMessageAge			=> 7200,
 
-'Maximum number of messages to send to a subscriber before forcing their connection to close. Use 0 to disable',
-	MaxMessages				=> 0,
+'Whether to close subscriber connections once at least one message has been sent, and there are no further messages pending.  1 to enable, 0 to disable.  Irrelevant unless Persist is set to 1.',
+	CloseOnEvent			=> 0,
 
 'Maximum number of stored messages per channel',
 	MaxMessagesPerChannel	=> 250,
@@ -103,7 +106,7 @@ package Meteor::Config;
 	SubscriberPort			=> 4670,
 
 'Subscriber Shutdown message, sent when the subscriber server shuts down (leave empty for no message)',
-	SubscriberShutdownMsg		=> '<script>eof();</script>\r\n',
+	SubscriberShutdownMsg	=> '<script>eof();</script>\r\n',
 
 'An absolute filesystem path, to be used as the document root for Meteor\'s static file web server. If left empty, no documents will be served.',
 	SubscriberDocumentRoot	=> '/usr/local/meteor/public_html',

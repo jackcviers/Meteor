@@ -52,7 +52,6 @@ sub addAllHandleBits {
 	my $rVecRef=shift;
 	my $wVecRef=shift;
 	my $eVecRef=shift;
-	
 	my @cons=@Connections;
 	map {$_->addHandleBits($rVecRef,$wVecRef,$eVecRef) if(defined($_)) } @cons;
 }
@@ -76,6 +75,82 @@ sub closeAllConnections {
 	my @cons=@Connections;
 	
 	map { $_->close(); } @cons;
+}
+
+sub listConnections {
+	my $class=shift;
+	my $list='';
+	foreach my $conn (@Connections) {
+		$list .= $conn->{'socketFN'}.' '.$conn->{'ip'}.' '.$conn->{'type'};
+		if (exists($conn->{'subscriberID'})) {
+			$list .= ' '.$conn->{'subscriberID'};
+		}
+		$list .= "$::CRLF";
+	}
+	$list;
+}
+
+sub describeConnWithFileNum {
+	my $class=shift;
+	my $filenum=shift;
+	foreach my $conn (@Connections) {
+		if ($conn->{'socketFN'}==$filenum) {
+			my $ret = "";
+			if (exists($conn->{'socketFN'})) {
+				$ret .= "socketFN: ".$conn->{'socketFN'}."$::CRLF";
+			}
+			if (exists($conn->{'connectionStart'})) {
+				$ret .= "connectionStart: ".$conn->{'connectionStart'}."$::CRLF";
+			}
+			if (exists($conn->{'writeBuffer'})) {
+				$ret .= "writeBuffer: ".$conn->{'writeBuffer'}."$::CRLF";
+			}
+			if (exists($conn->{'readBuffer'})) {
+				$ret .= "readBuffer: ".$conn->{'readBuffer'}."$::CRLF";
+			}
+			if (exists($conn->{'bytesWritten'})) {
+				$ret .= "bytesWritten: ".$conn->{'bytesWritten'}."$::CRLF";
+			}
+			if (exists($conn->{'type'})) {
+				$ret .= "type: ".$conn->{'type'}."$::CRLF";
+			}
+			if (exists($conn->{'mode'})) {
+				$ret .= "mode: ".$conn->{'mode'}."$::CRLF";
+			}
+			if (exists($conn->{'ip'})) {
+				$ret .= "ip: ".$conn->{'ip'}."$::CRLF";
+			}
+			if (exists($conn->{'headerBuffer'})) {
+				$ret .= "headerBuffer: ".$conn->{'headerBuffer'}."$::CRLF";
+			}
+			if (exists($conn->{'messageCount'})) {
+				$ret .= "messageCount: ".$conn->{'messageCount'}."$::CRLF";
+			}
+			if (exists($conn->{'connectionStart'})) {
+				$ret .= "age: ".(time-$conn->{'connectionStart'})."$::CRLF";
+			}
+			if (exists($conn->{'connectionTimeLimit'})) {
+				$ret .= "connectionTimeLimit: ".$conn->{'connectionTimeLimit'}."$::CRLF";
+			}
+			if (exists($conn->{'useragent'})) {
+				$ret .= "useragent: ".$conn->{'useragent'}."$::CRLF";
+			}
+			if (exists($conn->{'subscriberID'})) {
+				$ret .= "subscriberID: ".$conn->{'subscriberID'}."$::CRLF";
+			}
+			return $ret;
+		}
+	}
+	return -1;
+}
+
+sub destroyBadRequests {
+	foreach my $conn (@Connections) {
+		if (time-$conn->{'connectionStart'} > 30 && !exists($conn->{'subscriberID'}) && $conn->{'type'} eq 'Meteor::Subscriber') {
+			&::syslog('debug',"Closing misbehaving subscriber %s",$conn->{'socketFN'});
+			$conn->close();
+		}
+	}
 }
 
 ###############################################################################
@@ -105,17 +180,19 @@ sub newFromServer {
 	
 	$self->{'socket'}=$socket;	
 	$self->{'socketFN'}=$socket->fileno();
+	$self->{'connectionStart'}=time;
 	
 	$socket->setNonBlocking();
 	
 	$self->{'writeBuffer'}='';
 	$self->{'readBuffer'}='';
 	$self->{'bytesWritten'}=0;
+	$self->{'type'}=ref($self);
 	$self->{'ip'}=$socket->{'connection'}->{'remoteIP'};
 	
 	push(@Connections,$self);
 	
-	&::syslog('debug',"New %s for %s",ref($self),$socket->{'connection'}->{'remoteIP'});
+	&::syslog('debug',"New %s for %s using file number %s",ref($self),$self->{'ip'},$self->{'socketFN'});
 	
 	$self;
 }

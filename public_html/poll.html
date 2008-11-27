@@ -14,10 +14,29 @@ var isaborted = 0;
 parent.Meteor.register(this);
 
 function newXmlHttp() {
-	try { return new ActiveXObject("Msxml2.XMLHTTP"); } catch (e) {}
-	try { return new ActiveXObject("Microsoft.XMLHTTP"); } catch (e) {}
-	try { return new XMLHttpRequest(); } catch(e) {}
-	return null;
+	var xhr = null;
+    try { xhr = new ActiveXObject("Msxml2.XMLHTTP"); } catch (e) {
+		try { xhr = new ActiveXObject("Microsoft.XMLHTTP"); } catch (e) {
+			try { xhr = new XMLHttpRequest(); } catch(e) { return false }
+		}
+	}
+	return xhr;
+}
+
+function setHeaders(xhr) {
+
+	function safeSet(k, v) {
+		try {
+			xhr.setRequestHeader(k, v);
+		} catch(e) {}
+	}
+
+	safeSet("User-Agent", null);
+	safeSet("Accept", null);
+	safeSet("Accept-Language", null);
+	safeSet("Content-Type", "M");
+	safeSet("Connection", "keep-alive");
+	safeSet("Keep-Alive", null);
 }
 
 function poll() {
@@ -41,6 +60,7 @@ function poll() {
 		var t = now.getTime();
 		lastrequesttime = t;
 		if (parent.Meteor.polltimeout) polltimer = setTimeout(ptimeout, parent.Meteor.polltimeout);
+		setHeaders(pollreq);
 		pollreq.send(null);
 	}
 }
