@@ -57,12 +57,6 @@ sub newFromServer {
 	$self->{'headerBuffer'}='';
 	$self->{'messageCount'}=0;
 	
-	my $maxTime=$::CONF{'MaxTime'};
-	if($maxTime>0)
-	{
-		$self->{'connectionTimeLimit'}=$self->{'connectionStart'}+$maxTime;
-	}
-	
 	$::Statistics->{'current_subscribers'}++;
 	$::Statistics->{'subscriber_connections_accepted'}++;
 	
@@ -201,10 +195,16 @@ sub processLine {
 					my $startIndex=$channels->{$channelName}->{'startIndex'};
 					$self->{'channels'}->{$channelName}->addSubscriber($self,$startIndex,$persist,$self->{'mode'},$self->{'useragent'});
 				}
-				delete ($self->{'channels'}) unless($persist);
-				$self->close(1, 'responseComplete') unless($persist);
-				$self->close(1, 'closedOnEvent') unless($self->{'messageCount'} == 0);
+				if (!$persist) {
+					delete ($self->{'channels'});
+					$self->close(1, 'responseComplete');
+				}
 				delete($self->{'headerBuffer'});
+
+				# If long polling, close connection immediately if any messages have been sent
+				if ($self->{'messageCount'} > 0 && $self->{'mode'} eq 'longpoll') {
+					$self->close(1, 'closedOnEvent');
+				}
 				return;
 			}
 		}
@@ -218,7 +218,7 @@ sub processLine {
 		elsif($self->{'headerBuffer'}=~/GET\s+([^\s\?]+)/)
 		{
 			Meteor::Document->serveFileToClient($1,$self);
-			$self->close(1, 'responseComplete');
+			$self->SUPER::close();
 			return;
 		}
 		
@@ -377,10 +377,8 @@ sub getConf {
 	my $self=shift;
 	my $key=shift;
 	
-	if(exists($self->{'mode'}) && $self->{'mode'} ne '')
-	{
-		my $k=$key.$self->{'mode'};
-		
+	if(exists($self->{'mode'}) && $self->{'mode'} ne '') {
+		my $k=$key.$self->{'mode'};		
 		if(exists($::CONF{$k})) {
 			return $::CONF{$k};
 		}

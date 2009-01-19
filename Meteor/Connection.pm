@@ -146,7 +146,7 @@ sub describeConnWithFileNum {
 
 sub destroyBadRequests {
 	foreach my $conn (@Connections) {
-		if (time-$conn->{'connectionStart'} > 30 && !exists($conn->{'subscriberID'}) && $conn->{'type'} eq 'Meteor::Subscriber') {
+		if (time-$conn->{'connectionStart'} > 30 && !$conn->{'autoClose'} && !exists($conn->{'subscriberID'}) && $conn->{'type'} eq 'Meteor::Subscriber') {
 			&::syslog('debug',"Closing misbehaving subscriber %s",$conn->{'socketFN'});
 			$conn->close();
 		}

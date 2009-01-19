@@ -77,11 +77,11 @@ Meteor = {
 	},
 
 	connect: function() {
-		Meteor.log("Connecting");
 		if (!Meteor.host) throw "Meteor host not specified";
 		if (isNaN(Meteor.port)) throw "Meteor port not specified";
 		if (!Meteor.channelcount) throw "No channels specified";
 		if (Meteor.status) Meteor.disconnect();
+		Meteor.log("Connecting");
 		Meteor.setstatus(1);
 		if (!Meteor.hostid) Meteor.hostid = Meteor.time()+""+Math.floor(Math.random()*1000000)
 		document.domain = Meteor.extract_xss_domain(document.domain);
@@ -107,11 +107,12 @@ Meteor = {
 
 	disconnect: function() {
 		if (Meteor.status) {
+			if (Meteor.status != 6) Meteor.setstatus(0);
+			Meteor.clearpoll();
 			clearTimeout(Meteor.pingtimer);
 			clearTimeout(Meteor.updatepollfreqtimer);
 			clearTimeout(Meteor.frameloadtimer);
 			if (typeof CollectGarbage == 'function') CollectGarbage();
-			if (Meteor.status != 6) Meteor.setstatus(0);
 			Meteor.log("Disconnected");
 			try { Meteor.frameref.parentNode.removeChild(Meteor.frameref); delete Meteor.frameref; return true; } catch(e) { }
 			try { Meteor.frameref.open(); Meteor.frameref.close(); return true; } catch(e) {}			
@@ -319,9 +320,11 @@ Meteor = {
 	},
 
 	clearpoll: function() {
-		var s = document.getElementById('meteorpoll'+Meteor.pollnum);
-		if (typeof s != 'undefined') s.parentNode.removeChild(s);
-		if (Meteor.status) {
+		if (document.getElementById('meteorpoll'+Meteor.pollnum)) {
+			var s = document.getElementById('meteorpoll'+Meteor.pollnum);
+			s.parentNode.removeChild(s);
+		}
+		if (Meteor.status == 5) {
 			var x = parent.Meteor.pollfreq - (Meteor.time()-Meteor.lastrequest);
 			if (x < 10) x = 10;
 			setTimeout(Meteor.poll, x);

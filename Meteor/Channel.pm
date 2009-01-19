@@ -202,9 +202,10 @@ sub removeSubscriber {
 		my $timeConnected = time - $subscriber->{'connectionStart'};
 		&::syslog('info','',
 			'leavechannel',
+			$subscriber->{'socketFN'},
+			$self->{'name'},
 			$subscriber->{'ip'},
 			$subscriber->{'subscriberID'},
-			$self->{'name'},
 			$timeConnected,
 			$subscriber->{'messageCount'},
 			$subscriber->{'bytesWritten'},
