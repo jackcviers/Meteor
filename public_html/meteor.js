@@ -60,6 +60,7 @@ Meteor = {
 	},
 
 	joinChannel: function(channelname, backtrack) {
+		if (!channelname.length) throw('No channel specified');
 		if (typeof(Meteor.channels[channelname]) != "undefined") throw "Cannot join channel "+channelname+": already subscribed";
 		Meteor.channels[channelname] = {backtrack:backtrack};
 		Meteor.log("Joined channel "+channelname);
@@ -68,6 +69,7 @@ Meteor = {
 	},
 
 	leaveChannel: function(channelname) {
+		if (!channelname.length) throw('No channel specified');
 		if (typeof(Meteor.channels[channelname]) == "undefined") throw "Cannot leave channel "+channelname+": not subscribed";
 		delete Meteor.channels[channelname];
 		Meteor.log("Left channel "+channelname);
