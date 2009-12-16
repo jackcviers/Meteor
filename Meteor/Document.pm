@@ -224,7 +224,8 @@ sub newDocument {
 	#
 	# new instance from new server connection
 	#
-	my $self=shift->new();
+	my $class = shift;
+	my $self=$class->new();
 	
 	my $path=shift;
 	$self->{'path'}=$path;
@@ -236,6 +237,22 @@ sub newDocument {
 		$self->{'document'}=<IN>;
 		close(IN);
 	}
+
+	# Process SSIs - only #include virtual supported for the moment
+	$self->{'document'}=~s/\<\!\-\-\#include\s+virtual\s*=\"([^\"]+)\"\s*\-\-\>/
+		&::syslog('debug', "Meteor::Document: Processing SSI ".$1);
+		my $ssipath = $class->pathToAbsolute($1);
+		if ($ssipath) {
+			open(IN,$ssipath);
+			my $content = <IN>;
+			close(IN);
+			$content;
+		} else {
+			&::syslog('alert', "Meteor::Document: Failed to include SSI ".$1);
+			'';
+		}
+	/gex;
+
 	
 	$self->{'size'}=length($self->{'document'});
 	
