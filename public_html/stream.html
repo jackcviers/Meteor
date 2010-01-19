@@ -73,7 +73,7 @@ function extractEvents(responsestr) {
 }
 
 window.onload = function() {
-	if (parent.Meteor.status == 4) startstream();
+	if (parent.Meteor.status == 4) setTimeout(startstream, 1);
 }
 </script>
 </body>
