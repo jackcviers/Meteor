@@ -232,19 +232,22 @@ sub newDocument {
 	
 	# Read file
 	{
-	    local $/; # enable localized slurp mode
+		local $/; # enable localized slurp mode
 		open(IN,$path) or return undef;
 		$self->{'document'}=<IN>;
 		close(IN);
 	}
 
 	# Process SSIs - only #include virtual supported for the moment
+	{
+	local $/; # enable localized slurp mode
 	$self->{'document'}=~s/\<\!\-\-\#include\s+virtual\s*=\"([^\"]+)\"\s*\-\-\>/
 		&::syslog('debug', "Meteor::Document: Processing SSI ".$1);
 		my $ssipath = $class->pathToAbsolute($1);
+		my $content;
 		if ($ssipath) {
 			open(IN,$ssipath);
-			my $content = <IN>;
+			$content = <IN>;
 			close(IN);
 			$content;
 		} else {
@@ -252,6 +255,7 @@ sub newDocument {
 			'';
 		}
 	/gex;
+	}
 
 	
 	$self->{'size'}=length($self->{'document'});
