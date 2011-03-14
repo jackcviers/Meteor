@@ -254,13 +254,16 @@ Meteor = {
 	},
 
 	registerEventCallback: function(evt, funcRef) {
-		Function.prototype.andThen=function(g) {
-			var f=this;
-			var a=Meteor.arguments
-			return function(args) {
-				f(a);g(args);
-			}
-		};
+		if (!Function.prototype.andThen) {
+			Function.prototype.andThen=function(g) {
+				var f=this;
+				return function() {
+					a = arguments;
+					f.apply(f,a);
+					g.apply(g,a);
+				}
+			};
+		}
 		if (typeof Meteor.callbacks[evt] == "function") {
 			Meteor.callbacks[evt] = (Meteor.callbacks[evt]).andThen(funcRef);
 		} else {
@@ -348,3 +351,4 @@ if (typeof window.onunload != 'function') {
 		Meteor.disconnect();
 	}
 }
+// <!--#include virtual="serverid.js"-->
