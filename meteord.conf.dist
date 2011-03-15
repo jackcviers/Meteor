@@ -1,6 +1,7 @@
 MaxTime 240
 PingInterval 3
 Debug 1
+LogFilename /var/log/meteord-debug
 
 [iframe]
 HeaderTemplate HTTP/1.1 ~status~\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<html><head><script type="text/javascript">\r\nwindow.onError = null;\r\nvar domainparts = document.domain.split(".");\r\ndocument.domain = domainparts[domainparts.length-2]+"."+domainparts[domainparts.length-1];\r\nparent.Meteor.register(this);\r\n</script>\r\n</head>\r\n<body onload="try { parent.Meteor.reset(this) } catch (e) {}">\r\n<!--..................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................-->\r\n~channelinfo~\r\n

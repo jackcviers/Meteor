@@ -116,6 +116,9 @@ package Meteor::Config;
 
 'The syslog facility to use',
 	SyslogFacility			=> 'daemon',
+'The logging filename to use',
+	LogFilename			=> '/dev/stdout',
+
 	
 'IP address for udp server (leave empty for all local addresses)',
 	UDPIP					=> '',

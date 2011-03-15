@@ -1,29 +1,87 @@
 #!/bin/sh
+#
+# meteord       This shell script takes care of starting and stopping
+#               the Meteor HTTP server (meteord).
+#
+#
 # description: Runs meteord
+# processname: meteord
+# config: /etc/meteord.conf
+# pidfile: /var/run/meteord.pid
 # chkconfig: 2345 99 00
 
 # Source function library.
 . /etc/init.d/functions
 
 case "$1" in
-'start')
-echo -n "Starting Meteord: "
-echo 65535 > /proc/sys/fs/file-max
-ulimit -n 65535
-cd /usr/local/meteor
-sudo -u meteor ./meteord >/var/log/meteord 2>&1 &
-echo
-;;
-'stop')
-echo -n "Stopping Meteord: "
-killall meteord && success || failure
-;;
-'reload')
-echo -n "Reloading Meteord configuration: "
-killall -s SIGHUP meteord && success || failure
-;;
-*)
-echo "Usage: $0 { start | stop | reload }"
-;;
+	'start')
+		echo -n "Starting Meteord: "
+
+		# Check to see if it's already running:
+		PID=`cat "/var/run/meteord.pid" 2>/dev/null `
+		if [ -n "$PID" ]; then
+			kill -s 0 "$PID" >/dev/null 2>&1
+			RETVAL=$?
+			if [ $RETVAL -eq 0 ]; then
+				echo -n "  Already running (pid $PID)"
+				failure
+				echo
+				exit 1
+			fi
+		fi
+
+		echo 65535 > /proc/sys/fs/file-max
+		ulimit -n 65535
+
+		touch /var/run/meteord.pid
+		chown meteor:meteor /var/run/meteord.pid
+
+		cd /usr/local/meteor
+		sudo -u meteor ./meteord >/var/log/meteord 2>&1 &
+		
+		# Check it's still running:
+		sleep 1
+		PID=`cat "/var/run/meteord.pid" 2>/dev/null `
+		if [ -n "$PID" ]; then
+			kill -s 0 "$PID" 2>&1 >/dev/null && success || failure
+		else
+			failure
+		fi
+		;;
+
+	'stop')
+		echo -n "Stopping Meteord: "
+		PID=`cat "/var/run/meteord.pid"  2>/dev/null `
+		if [ -n "$PID" ]; then
+			/bin/kill "$PID" >/dev/null 2>&1 && success || failure
+		else
+			echo
+			echo "No process ID found." && failure
+		fi
+		;;
+
+	'restart')
+		echo -n "Restarting Meteord:"
+		warning
+		echo
+		echo "  Normally you can use 'reload' rather than 'restart'"
+		$0 stop
+		$0 start
+		;;
+
+	'reload')
+		echo -n "Reloading Meteord configuration: "
+		PID=`cat "/var/run/meteord.pid"  2>/dev/null `
+		if [ -n "$PID" ]; then
+			kill -s HUP "$PID" && success || failure
+		else
+			echo
+			echo "No process ID found." && failure
+		fi
+		;;
+	*)
+		echo "Usage: $0 { start | stop | reload }"
+		;;
 esac
+echo
 exit 0

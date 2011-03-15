@@ -2,7 +2,7 @@
 ###############################################################################
 #   Meteor
 #   An HTTP server for the 2.0 web
-#   Copyright (c) 2006 contributing authors
+#   Copyright (c) 2006-2010 contributing authors
 #
 #   The Meteor daemon
 #
@@ -32,10 +32,10 @@
 ###############################################################################
 
 ###############################################################################
-# meterod version
+# meteord version
 ################################################################################
 	
-	$::VERSION='1.06.05';
+	$::VERSION='1.06.06';
 	$::RELEASE_DATE='not yet released';
 
 ###############################################################################
@@ -56,7 +56,7 @@
 	use Meteor::Document;
 	use Meteor::Config;
 	
-	$::CRLF="\r\n";		# Line separator to be used throughout all modules
+	$::CRLF="\r\n";         # Line separator to be used throughout all modules
 	
 	our $CONTROL_QUEUE_SIZE=5;
 	our $SUBSCRIBER_QUEUE_SIZE=20;
@@ -134,6 +134,9 @@
 		else
 		{
 			&::syslog('info',"PID\t%s",$$);
+			open(OUT,">/var/run/$::PGM.pid");
+			print OUT "$$\n";
+			close(OUT);
 		}
 	}
 	
@@ -234,7 +237,7 @@
 					}
 					if(defined($udpServerFN) && vec($rout,$udpServerFN,1))
 					{
-						&handleUPD($udpServer);
+						&handleUDP($udpServer);
 					}
 					
 					Meteor::Connection->checkAllHandleBits($rout,$wout,$eout);
@@ -249,12 +252,13 @@
 				{
 					$::HUP=0;
 					
-					&::syslog('info',"Received SIGHUP, re-reading config and clearing document cache!");
+					&::syslog('info',"Received SIGHUP, re-reading config, reopening logs and clearing document cache!");
 					
+					Meteor::Syslog->cycleLogFileHandle();
 					Meteor::Config->readConfig();
 					Meteor::Config->updateConfig();
 					
-					Meteor::Document->clearDocuments()
+					Meteor::Document->clearDocuments();
 				}
 				
 				if($::USR1)
@@ -362,7 +366,7 @@
 ###############################################################################
 # Subroutines
 ###############################################################################
-sub handleUPD {
+sub handleUDP {
 	$udpServer=shift;
 	
 	my $line;

@@ -34,7 +34,8 @@ package Meteor::Syslog;
 
 	use strict;
 	use Sys::Syslog;
-	
+	use IO::File;
+
 ###############################################################################
 # Configuration
 ###############################################################################
@@ -44,17 +45,24 @@ package Meteor::Syslog;
 	$Meteor::Syslog::_lasttimestamp=0;
 	$Meteor::Syslog::_lasttimestring="";
 	$Meteor::Syslog::_open=0;		# set to 1 by _open
+	$Meteor::Syslog::_logFileHandle = 0;
 	
 ###############################################################################
 # Implementation
 ###############################################################################
 sub ::syslog {
-	
+
+	if ($Meteor::Syslog::_logFileHandle eq 0) 
+	{
+		$Meteor::Syslog::_default_filename=$::CONF{'LogFilename'} || "/dev/stdout";
+		$Meteor::Syslog::_logFileHandle = &createLogFileHandle($Meteor::Syslog::_default_filename);
+	}
+
 	my $debug=$::CONF{'Debug'};
-	
+
 	my $priority=shift;
-	return if($priority eq 'debug' && !$debug);
-	
+	return if($priority eq 'debug' && !$debug); 
+
 	my $format=shift;
 	my @args=@_;
 	
@@ -80,9 +88,9 @@ sub ::syslog {
 			$time = $Meteor::Syslog::_lasttimestring;
 		}
 
-		print STDERR "$time\t$priority\t";
-		print STDERR sprintf($format,@args);
-		print STDERR "\n" unless(substr($format,-1) eq "\n");
+		$Meteor::Syslog::_logFileHandle->print("$time\t$priority\t");
+		$Meteor::Syslog::_logFileHandle->print(sprintf($format,@args));
+		$Meteor::Syslog::_logFileHandle->print("\n") if (substr($format,-1) ne "\n");
 		
 		return;
 	}
@@ -122,6 +130,20 @@ sub myDie {
 		$Meteor::Socket::NO_WARN_ON_CLOSE=1;
 		exit;
 	}
+}
+
+sub createLogFileHandle {
+	my $fn = shift;
+	my $fh = new IO::File($fn,"a") or die "Could not open $fn \n"; 
+	return $fh;
+}
+
+sub cycleLogFileHandle{
+	$Meteor::Syslog::_logFileHandle->print("Cycling Filehandle\n");
+	$Meteor::Syslog::_logFileHandle->close();
+	$Meteor::Syslog::_default_filename=$::CONF{'LogFilename'} || "/dev/stdout";
+	$Meteor::Syslog::_logFileHandle->open($Meteor::Syslog::_default_filename,"a");
+	return 0 if $Meteor::Syslog::_logFileHandle;
 }
 
 1;
