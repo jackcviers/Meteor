@@ -160,7 +160,11 @@ Meteor = {
 			Meteor.frameref.parentWindow.Meteor = Meteor;
 			Meteor.frameref.close();
 			var ifrDiv = Meteor.frameref.createElement("div");
-			Meteor.frameref.appendChild(ifrDiv);
+			try { 
+				Meteor.frameref.appendChild(ifrDiv); 
+			} catch(e) { 
+				Meteor.frameref.documentElement.appendChild(ifrDiv); 
+			} 
 			ifrDiv.innerHTML = "<iframe src=\""+url+"\"></iframe>";
 		} catch (e) {
 			if (!Meteor.frameref) {
